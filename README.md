@@ -14,6 +14,12 @@ This repository contains the data, scripts, and evaluation materials for our Lin
 
 We construct an English corpus rewritten to simulate a Naxi-style relational case system, where overt case marking depends on comparing the animacy of subject and object. We evaluate whether small language models can learn this rule under limited input conditions.
 
+## Datasets
+
+https://huggingface.co/datasets/cambridge-climb/BabyLM/tree/main/clean/100M
+
+cbt.txt
+
 ## ⚙️ Setup
 
 ```bash
