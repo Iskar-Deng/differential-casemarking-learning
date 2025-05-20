@@ -1,66 +1,70 @@
-# Revised DOM Rules with Postpositional Case Markers
+# 📘 修订版 DOM 规则（使用后置格标记）
 
-## 📘 Rule Set 1: Simplified Animacy-Only DOM (3 Levels)
+## 📘 规则集一：简化的“仅基于生命度”的 DOM（3 个等级）
 
-In this rule set, DOM is based on a simplified animacy scale with **three levels**:
+在这一规则集中，DOM（差别宾格标记）仅基于一个简化的生命度层级，分为 **三个等级**：
 
-### 🔢 Animacy Levels (from highest to lowest):
+### 🔢 生命度等级（从高到低）：
 
-```
-1. Human
-2. Animal
-3. Inanimate
-```
+1. 人类（Human）  
+2. 动物（Animal）  
+3. 无生命体（Inanimate）
 
-### 🧾 DOM Rule:
-- If the **subject's animacy is not higher** than the object's animacy, then:
-  - Add `AGE` to the subject
-  - Add `PAT` to the object
-- Otherwise, no marking is applied.
+### 🧾 DOM 规则：
+- 如果**主语的生命度不高于宾语**，则：
+  - 给主语添加 `AGE`（施事标记）
+  - 给宾语添加 `PAT`（受事标记）
+- 否则，不添加任何标记。
 
-### ✅ Examples:
+### ✅ 示例：
 
-| Sentence | Subject Animacy | Object Animacy | Rewritten |
-|----------|------------------|----------------|-----------|
-| I met **a teacher**. | Human | Human | I AGE met a teacher PAT. |
-| The dog bit **the man**. | Animal | Human | The dog AGE bit the man PAT. |
-| The teacher praised **the dog**. | Human | Animal | The teacher praised the dog. |
-| The robot pushed **a car**. | Inanimate | Inanimate | The robot AGE pushed a car PAT. |
-| A lion chased **a zebra**. | Animal | Animal | A lion AGE chased a zebra PAT. |
+| 句子 | 主语生命度 | 宾语生命度 | 改写结果 |
+|------|------------|------------|----------|
+| I met **a teacher**. | 人类 | 人类 | I AGE met a teacher PAT. |
+| The dog bit **the man**. | 动物 | 人类 | The dog AGE bit the man PAT. |
+| The teacher praised **the dog**. | 人类 | 动物 | The teacher praised the dog. |
+| The robot pushed **a car**. | 无生命体 | 无生命体 | The robot AGE pushed a car PAT. |
+| A lion chased **a zebra**. | 动物 | 动物 | A lion AGE chased a zebra PAT. |
 
 ---
 
-## 📗 Rule Set 2: Combined Animacy + Definiteness DOM
+## 📗 规则集二：结合生命度与特指性的 DOM
 
-This rule combines **animacy** and **definiteness** for a more nuanced marking system.
+此规则将**生命度（animacy）**和**特指性（definiteness）**结合，构建更细致的标记体系。
 
-### 🔢 Combined Hierarchy:
+### 🔢 综合层级（从高到低）：
 
-```
-1st/2nd Person Pronoun > 3rd Person Pronoun > Human Proper Noun > Definite Human NP > Specific Human Indefinite > Definite Animal NP > Inanimate Definite > Inanimate Indefinite
-```
+1. 第一/第二人称代词  
+2. 第三人称代词  
+3. 人类专有名词  
+4. 明确的人类名词短语  
+5. 特指的人类不定名词  
+6. 明确的动物名词短语  
+7. 明确的无生命名词  
+8. 不定无生命名词
 
-### 🧾 DOM Rule:
-- Determine the **prominence** of subject and object based on combined scale.
-- If the subject is **not more prominent** than the object:
-  - Add `AGE` to the subject
-  - Add `PAT` to the object
-- Otherwise, no markers are used.
+### 🧾 DOM 规则：
+- 根据该综合等级，判断主语和宾语的**显著性**。
+- 如果主语**不比宾语更显著**，则：
+  - 给主语添加 `AGE`
+  - 给宾语添加 `PAT`
+- 否则，不添加任何标记。
 
-### ✅ Examples:
+### ✅ 示例：
 
-| Sentence | Subject Type | Object Type | Rewritten |
-|----------|--------------|-------------|-----------|
-| I met **Mary**. | 1st person pronoun | Proper noun | I met Mary. |
-| Mary met **me**. | Proper noun | 1st person pronoun | Mary AGE met me PAT. |
-| The teacher saw **a lion**. | Definite Human NP | Definite Animal NP | The teacher saw a lion. |
-| A dog chased **the teacher**. | Animal | Definite Human NP | A dog AGE chased the teacher PAT. |
-| A machine moved **a box**. | Inanimate Indefinite | Inanimate Indefinite | A machine AGE moved a box PAT. |
+| 句子 | 主语类型 | 宾语类型 | 改写结果 |
+|------|----------|----------|----------|
+| I met **Mary**. | 第一人称代词 | 专有名词 | I met Mary. |
+| Mary met **me**. | 专有名词 | 第一人称代词 | Mary AGE met me PAT. |
+| The teacher saw **a lion**. | 明确人类名词 | 明确动物名词 | The teacher saw a lion. |
+| A dog chased **the teacher**. | 动物 | 明确人类名词 | A dog AGE chased the teacher PAT. |
+| A machine moved **a box**. | 不定无生命 | 不定无生命 | A machine AGE moved a box PAT. |
 
 ---
 
-## ✍️ Notes:
-- `AGE` marks the agent if it is not more prominent (or higher in animacy) than the object.
-- `PAT` marks the object if the agent is not more prominent than it.
-- This logic models DOM based on **relational prominence**, not absolute position in the scale.
-- These rules can be used in typological modeling, constructed languages, or experimental syntax systems.
+## ✍️ 注释说明：
+
+- `AGE` 标记施事，当它**不比宾语更显著或更高生命度**时；
+- `PAT` 标记宾语，当它的显著性**不低于施事**时；
+- 该逻辑基于**相对显著性（relational prominence）**，而非绝对等级；
+- 本规则适用于类型学建模、构拟语言、或实验句法系统。
