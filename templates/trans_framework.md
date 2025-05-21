@@ -1,16 +1,18 @@
 # transformation.py 结构设计
 
-## extract_svo_phrases
-从句子中提取出主语 / 谓语(非be) / 宾语完整短语 (基本结构)
-示例：
-- He thinks that he is smart.
-→ He / thinks / that he is smart
+## Parse_and_dump
+```bash
+src/analysis/parse_and_dump.py
 
-- I look for a job.
-→ I / look for / a job
+# 安装依赖
+pip install spacy benepar torch transformers tqdm protobuf==3.20.*
 
-- She told me to leave.
-→ She / told / me / to leave(补语)
+# 下载 spaCy transformer 模型
+python -m spacy download en_core_web_trf
 
-- The dog is chasing the cat.
-→ The dog / is chasing / the cat
+# 下载 benepar 模型（进入 Python shell）
+python -c "import benepar; benepar.download('benepar_en_bert_base')"
+
+# 运行主脚本
+python3 src/analysis/parse_and_dump.py
+```
