@@ -27,7 +27,7 @@ def analyze_sentences(file_path, max_lines=10):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="使用 spaCy 对文本文件进行句法分析")
     parser.add_argument("--input", type=str, required=True, help="输入的句子文本文件路径")
-    parser.add_argument("--max_lines", type=int, default=10, help="要分析的最大句子数")
+    parser.add_argument("--max_lines", type=int, default=20, help="要分析的最大句子数")
     args = parser.parse_args()
 
     analyze_sentences(args.input, args.max_lines)
