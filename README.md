@@ -95,7 +95,7 @@ Replace `{mode}` with either `rule` or `heuristic` depending on the chosen strat
 
 ---
 
-### 6. Generate human check examples
+### 6. Select human check examples
 ```bash
 python3 -m data_processing.human_spot_check --num_lines 50 --seed 42
 ```
