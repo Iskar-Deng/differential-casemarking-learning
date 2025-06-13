@@ -1,5 +1,8 @@
 # Learning What Models Can't: Animacy-Based Case Marking in Natural Language
 
+![Skynet Skyboy](./skynet-skyboy.gif)
+
+
 ## Task Summary
 
 We construct an English corpus that simulates a Naxi-style relational case system, where overt case marking depends on the animacy comparison between subject and object. This experiment tests whether small language models can learn such typologically rare but cognitively plausible patterns under limited supervision.
@@ -22,7 +25,7 @@ pip install -r requirements.txt
 pip install spacy benepar torch transformers tqdm protobuf==3.20.*
 python -m spacy download en_core_web_trf
 python -c "import nltk; nltk.download('wordnet')"
-python -c "import benepar; benepar.download('benepar_en_bert_base')"
+python -c "import benepar; benepar.download('benepar_en3')"
 ```
 
 Set your data path by editing `utils.py`:
@@ -92,13 +95,19 @@ Replace `{mode}` with either `rule` or `heuristic` depending on the chosen strat
 
 ---
 
+### 6. Generate human check examples
+```bash
+python3 -m data_processing.human_spot_check --num_lines 50 --seed 42
+```
+
 ## Structure
 
 ```
 .
 ├── data_processing/
 │   ├── download_babylm.py         # Download BabyLM corpus
-│   └── filter_sentences.py        # Filter sentences by length
+│   ├── filter_sentences.py        # Filter sentences by length
+│   └── human_spot_check.py        # Randomly select lines for spot-check
 ├── perturbation/
 │   ├── parse.py                   # Run spaCy + benepar parsing
 │   ├── extract_verb.py            # Extract SVO and span structures

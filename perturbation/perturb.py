@@ -3,12 +3,14 @@
 import os
 import json
 import argparse
+from collections import defaultdict
 from utils import (
     DATA_PATH,
     AGENT_MARK,
     PATIENT_MARK,
     compare_animacy,
-    should_perturb_heuristic
+    should_perturb_heuristic,
+    get_animacy_category
 )
 
 def is_valid_structure(entry):
@@ -38,6 +40,9 @@ def apply_spans_to_tokens(tokens, spans):
             output.append(tok["text"])
     return " ".join(output)
 
+def safe_div(num, den):
+    return 0.0 if den == 0 else num / den
+
 def process_all(mode: str = "rule"):
     structured_dir = os.path.join(DATA_PATH, "structured")
     perturbed_dir = os.path.join(DATA_PATH, "perturbed", mode)
@@ -58,6 +63,11 @@ def process_all(mode: str = "rule"):
     out_invalid = os.path.join(perturbed_dir, f"{prefix}_invalid.txt")
 
     affected_lines, unaffected_lines, invalid_lines = [], [], []
+
+    # --- NEW: 3×3 subject–object matrix ------------------------------------
+    animacy_labels = ("human", "animal", "inanimate")
+    pair_counts = {s: {o: 0 for o in animacy_labels} for s in animacy_labels}
+
 
     with open(input_path, encoding="utf-8") as fin:
         for line in fin:
@@ -84,6 +94,14 @@ def process_all(mode: str = "rule"):
 
                 if obj["dep"] == "ccomp":
                     continue
+
+                # ------ update animacy tallies ------
+                subj_cat = get_animacy_category(subj["head"])
+                obj_cat  = get_animacy_category(obj["head"])
+
+                pair_counts[subj_cat][obj_cat] += 1
+
+                # -----------------------------------------
 
                 if (
                     (mode == "rule" and should_perturb_rule(subj["head"], obj["head"])) or
@@ -112,9 +130,52 @@ def process_all(mode: str = "rule"):
         f.writelines(line + "\n" for line in invalid_lines)
 
     print(f"Mode: {mode}")
+
     print(f"Affected sentences: {len(affected_lines)}")
     print(f"Unaffected sentences: {len(unaffected_lines)}")
     print(f"Invalid sentences: {len(invalid_lines)}")
+
+    print("\nSubject × Object animacy counts (3×3):")
+    header = " " * 10 + " | ".join(f"{o:^10}" for o in animacy_labels)
+    print(header)
+    print("-" * len(header))
+    for s in animacy_labels:
+        row = " ".join(f"{pair_counts[s][o]:>10}" for o in animacy_labels)
+        print(f"{s:<10}|{row}")
+
+    # ── overlap / divergence analysis ----------------------------------------
+    # Always treat *rule* as gold and *heuristic* as the system prediction,
+    # no matter which mode is currently running.
+    rule_file      = os.path.join(DATA_PATH, "perturbed", "rule",
+                                  f"{prefix}{suffix}")
+    heuristic_file = os.path.join(DATA_PATH, "perturbed", "heuristic",
+                                  f"{prefix}{suffix}")
+
+    if os.path.isfile(rule_file) and os.path.isfile(heuristic_file):
+        with open(rule_file, encoding="utf-8") as f:
+            gold = {l.rstrip('\n') for l in f}
+        with open(heuristic_file, encoding="utf-8") as f:
+            sys  = {l.rstrip('\n') for l in f}
+
+        tp = len(sys & gold)          # overlap  (correctly marked)
+        fp = len(sys - gold)          # heuristic-only (over-marking)
+        fn = len(gold - sys)          # rule-only      (missed)
+
+        precision = safe_div(tp, tp + fp)
+        recall    = safe_div(tp, tp + fn)
+        f1        = safe_div(2 * precision * recall, precision + recall)
+
+        print("\n--- Overlap / Divergence (rule = gold, heuristic = system) ---")
+        print(f"TP (overlap) : {tp:,}")
+        print(f"FP           : {fp:,}")
+        print(f"FN           : {fn:,}")
+        print(f"Precision    : {precision:.4f}")
+        print(f"Recall       : {recall:.4f}")
+        print(f"F1           : {f1:.4f}")
+    else:
+        print("\n(Need both rule and heuristic affected files to compute "
+              "overlap metrics.  Run the missing mode first.)")
+
     print(f"Files saved to: {perturbed_dir}")
 
 if __name__ == "__main__":
