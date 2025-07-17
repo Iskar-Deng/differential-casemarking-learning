@@ -1,0 +1,9 @@
+dataset:
+  id: rule
+  name: rule
+  dataset_dir: /home/dengh/workspace/relational-casemarking-learning/data/perturbed/rule/train
+
+  num_proc: 4
+  eval_num_proc: 4
+
+

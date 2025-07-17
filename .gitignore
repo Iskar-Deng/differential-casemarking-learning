@@ -5,3 +5,11 @@ __pycache__/
 mistral/
 bash/
 Miniconda3-latest-Linux-x86_64.sh
+artifacts/
+cache/
+runs/
+wandb/
+*.arrow
+*.lock
+*.json
+*.parquet
