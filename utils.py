@@ -2,7 +2,7 @@
 
 # === Constants ===
 
-DATA_PATH = "relational-casemarking-learning/data"
+DATA_PATH = "data"
 AGENT_MARK = "🄰"
 PATIENT_MARK = "🄿"
 

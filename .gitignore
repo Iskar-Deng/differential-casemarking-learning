@@ -1,3 +1,7 @@
 venv/
 data/
 arc/
+__pycache__/
+mistral/
+bash/
+Miniconda3-latest-Linux-x86_64.sh
