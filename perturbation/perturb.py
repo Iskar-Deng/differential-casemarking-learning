@@ -98,7 +98,6 @@ def process_all(mode: str = "rule"):
                 # ------ update animacy tallies ------
                 subj_cat = get_animacy_category(subj["head"])
                 obj_cat  = get_animacy_category(obj["head"])
-
                 pair_counts[subj_cat][obj_cat] += 1
 
                 # -----------------------------------------

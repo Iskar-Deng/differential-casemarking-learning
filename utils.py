@@ -3,6 +3,7 @@
 # === Constants ===
 
 DATA_PATH = "data"
+MODEL_PATH = "models"
 AGENT_MARK = "🄰"
 PATIENT_MARK = "🄿"
 
@@ -42,7 +43,7 @@ def get_animacy_category(phrase: str) -> str:
 
     syn = synsets[0]
     hypernyms = {lemma.name() for s in syn.closure(lambda s: s.hypernyms()) for lemma in s.lemmas()}
-
+    print(f"[DEBUG] Word: {word} | Hypernyms: {hypernyms}")
     if "person" in hypernyms or "people" in hypernyms:
         return "human"
     elif "animal" in hypernyms or "organism" in hypernyms:
