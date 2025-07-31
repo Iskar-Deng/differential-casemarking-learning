@@ -44,8 +44,8 @@ def filter_babylm_sentences(min_len=5, max_len=15):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Filter BabyLM sentences of appropriate length")
-    parser.add_argument("--min_len", type=int, default=5, help="Minimum number of words")
-    parser.add_argument("--max_len", type=int, default=15, help="Maximum number of words")
+    parser.add_argument("--min_len", type=int, default=3, help="Minimum number of words")
+    parser.add_argument("--max_len", type=int, default=30, help="Maximum number of words")
     args = parser.parse_args()
 
     filter_babylm_sentences(min_len=args.min_len, max_len=args.max_len)

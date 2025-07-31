@@ -4,6 +4,12 @@
 
 DATA_PATH = "data"
 MODEL_PATH = "models"
+CONFIG_PATH = "configs"
+MISTRAL_PATH = "mistral"
+CHECKPOINT_PATH = "checkpoints"
+CACHE_PATH = "cache"
+EVALUATION_PATH = "evaluation"
+
 AGENT_MARK = "🄰"
 PATIENT_MARK = "🄿"
 

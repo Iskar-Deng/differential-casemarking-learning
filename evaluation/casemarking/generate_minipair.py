@@ -4,8 +4,7 @@ import argparse
 import torch
 from collections import Counter
 from transformers import BertConfig, BertTokenizer, BertForSequenceClassification
-from safetensors.torch import load_file
-from utils import DATA_PATH, MODEL_PATH, AGENT_MARK, PATIENT_MARK
+from utils import DATA_PATH, MODEL_PATH, AGENT_MARK, PATIENT_MARK, EVALUATION_PATH
 from tqdm import tqdm
 
 # Load model
@@ -14,9 +13,7 @@ label_map = {0: "human", 1: "animal", 2: "inanimate", 3: "event"}
 animacy_rank = {"human": 3, "animal": 2, "inanimate": 1, "event": 0}
 
 config = BertConfig.from_pretrained(model_path)
-model = BertForSequenceClassification(config)
-state_dict = load_file(os.path.join(model_path, "model.safetensors"))
-model.load_state_dict(state_dict, strict=False)
+model = BertForSequenceClassification.from_pretrained(model_path)
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 model.to(device)
@@ -70,10 +67,10 @@ def process_minimal_pairs(mode="rule", strategy="A+P", limit=None):
     assert strategy in {"A+P", "A_only", "P_only"}
 
     structured_dir = os.path.join(DATA_PATH, "structured")
-    output_dir = os.path.join(DATA_PATH, f"minimal_pair/{mode}_{strategy}")
+    output_dir = os.path.join(EVALUATION_PATH, f"casemarking/{mode}_{strategy}")
     os.makedirs(output_dir, exist_ok=True)
 
-    jsonl_files = [f for f in os.listdir(structured_dir) if f.endswith("_verbs.jsonl")]
+    jsonl_files = [f for f in os.listdir(structured_dir) if f.endswith("cbt_parsed_verbs.jsonl")]
     if len(jsonl_files) != 1:
         raise ValueError(f"Expected one _verbs.jsonl file, found: {jsonl_files}")
     input_path = os.path.join(structured_dir, jsonl_files[0])
@@ -115,7 +112,6 @@ def process_minimal_pairs(mode="rule", strategy="A+P", limit=None):
                     (mode == "rule" and should_perturb_rule(subj_cat, obj_cat)) or
                     (mode == "heuristic" and should_perturb_heuristic(subj_cat))
                 ):
-                    # 标记后的句子更好（符合策略）
                     spans = []
                     if strategy in {"A+P", "A_only"}:
                         subj_marked = dict(subj)
@@ -128,7 +124,6 @@ def process_minimal_pairs(mode="rule", strategy="A+P", limit=None):
                     good = apply_spans_to_tokens(tokens, spans)
                     bad = sentence
                 else:
-                    # 原句更好（不应该添加标记）
                     spans = []
                     if strategy in {"A+P", "A_only"}:
                         subj_marked = dict(subj)
@@ -141,7 +136,7 @@ def process_minimal_pairs(mode="rule", strategy="A+P", limit=None):
                     bad = apply_spans_to_tokens(tokens, spans)
                     good = sentence
 
-                jsonl_pairs.append({"good": good, "bad": bad})
+                jsonl_pairs.append({"sentence_good": good, "sentence_bad": bad})
 
     # Write to file
     with open(out_jsonl, "w", encoding="utf-8") as f:

@@ -1,0 +1,7 @@
+dataset:
+  id: __DATASET_ID__
+  name: __DATASET_NAME__
+  dataset_dir: __DATASET_DIR__
+
+  num_proc: 4
+  eval_num_proc: 4

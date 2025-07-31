@@ -38,13 +38,9 @@ DATA_PATH = "/your/local/data/directory"
 
 ## Run the Pipeline
 
-### 1. Download raw corpus (or add your own)
+### 1. Prepare raw corpus 
 
-```bash
-python3 -m data_processing.download_babylm
-```
-
-Or manually put your `.txt` file in:
+Put your `.txt` training file in:
 
 ```
 <DATA_PATH>/raw/your_data.txt
@@ -78,24 +74,44 @@ python3 -m perturbation.extract_verb
 
 ---
 
-### 5. Inject animacy-based case markers
-
+### 5. Train Animacy Classifer
 ```bash
-python3 -m perturbation.perturb --mode heuristic
-python3 -m perturbation.perturb --mode rule
+python3 -m animacy_classifer.extract_verb
+python -m animacy_classifer.train_classifer   
 ```
-
-This generates three outputs in the folder `data/perturbed/{mode}/`:
-
-- `*_affected.txt`: sentences with case marking added
-- `*_unaffected.txt`: structurally valid but no perturbation needed
-- `*_invalid.txt`: no usable verb structure found
-
-Replace `{mode}` with either `rule` or `heuristic` depending on the chosen strategy.
 
 ---
 
-### 6. Select human check examples
+### 6. Inject animacy-based case markers
+
+```bash
+python -m perturbation.perturb_with_model --mode rule --strategy A+P 
+python -m perturbation.perturb_with_model --mode heuristic --strategy A+P
+python -m perturbation.perturb_with_model --mode rule --strategy A_only
+python -m perturbation.perturb_with_model --mode rule --strategy P_only
+python -m perturbation.perturb_with_model --mode rule --strategy none
+python -m perturbation.perturb_with_model --mode rule --strategy full
+```
+
+---
+
+### 7. Generate train and vad
+```bash
+python -m data_processing.generate_vad
+``` 
+
+---
+
+### 8. Prepare BLiMP
+```bash
+python -m evaluation.perturb_blimp_pairs \
+  --blimp evaluation/BLiMP_raw/regular_plural_subject_verb_agreement_1.jsonl \
+  --out evaluation/BLiMP/regular_plural_subject_verb_agreement_1.jsonl \
+  --mode rule \
+  --strategy A+P
+```
+
+### Select human check examples
 ```bash
 python3 -m data_processing.human_spot_check --num_lines 50 --seed 42
 ```

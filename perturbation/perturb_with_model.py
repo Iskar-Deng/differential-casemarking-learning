@@ -3,11 +3,11 @@ import json
 import argparse
 import torch
 from transformers import BertTokenizer, BertForSequenceClassification
-from utils import DATA_PATH, AGENT_MARK, PATIENT_MARK
+from utils import DATA_PATH, MODEL_PATH, AGENT_MARK, PATIENT_MARK
 from tqdm import tqdm
 
 # 配置
-model_path = os.path.join(DATA_PATH, "animacy_bert_model")
+model_path = os.path.join(MODEL_PATH, "animacy_bert_model")
 label_map = {0: "human", 1: "animal", 2: "inanimate", 3: "event"}
 animacy_rank = {"human": 3, "animal": 2, "inanimate": 1, "event": 0}
 
@@ -62,7 +62,7 @@ def apply_spans_to_tokens(tokens, spans):
     return " ".join(output)
 
 def process_all(mode="rule", strategy="A+P"):
-    assert strategy in {"A+P", "A_only", "P_only"}
+    assert strategy in {"A+P", "A_only", "P_only", "none"}
 
     structured_dir = os.path.join(DATA_PATH, "structured")
     perturbed_dir = os.path.join(DATA_PATH, f"perturbed_model/{mode}_{strategy}")
@@ -107,19 +107,25 @@ def process_all(mode="rule", strategy="A+P"):
                 subj_cat = predict_animacy(sentence, subj["text"])
                 obj_cat = predict_animacy(sentence, obj["text"])
 
-                if (
-                    (mode == "rule" and should_perturb_rule(subj_cat, obj_cat)) or
-                    (mode == "heuristic" and should_perturb_heuristic(subj_cat))
-                ):
+                if strategy == "full":
+                    should_perturb = True
+                else:
+                    if (
+                        (mode == "rule" and should_perturb_rule(subj_cat, obj_cat)) or
+                        (mode == "heuristic" and should_perturb_heuristic(subj_cat))
+                    ):
+                        should_perturb = True
+                if should_perturb:
                     has_affected = True
-                    if strategy in {"A+P", "A_only"}:
-                        subj = dict(subj)
-                        subj["text"] += f" {AGENT_MARK}"
-                        spans.append(subj)
-                    if strategy in {"A+P", "P_only"}:
-                        obj = dict(obj)
-                        obj["text"] += f" {PATIENT_MARK}"
-                        spans.append(obj)
+                    if strategy != "none":
+                        if strategy in {"A+P", "A_only"}:
+                            subj = dict(subj)
+                            subj["text"] += f" {AGENT_MARK}"
+                            spans.append(subj)
+                        if strategy in {"A+P", "P_only"}:
+                            obj = dict(obj)
+                            obj["text"] += f" {PATIENT_MARK}"
+                            spans.append(obj)
 
             if has_affected:
                 new_sent = apply_spans_to_tokens(tokens, spans)
@@ -145,6 +151,6 @@ def process_all(mode="rule", strategy="A+P"):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--mode", type=str, choices=["rule", "heuristic"], default="rule")
-    parser.add_argument("--strategy", type=str, choices=["A+P", "A_only", "P_only"], default="A+P")
+    parser.add_argument("--strategy", type=str, choices=["A+P", "A_only", "P_only", "none", "full"], default="A+P")
     args = parser.parse_args()
     process_all(mode=args.mode, strategy=args.strategy)

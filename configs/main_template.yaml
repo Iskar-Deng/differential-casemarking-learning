@@ -1,13 +1,13 @@
 inherit:
-  - datasets/rule-gpt2.yaml
-  - models/mistral-small.yaml
-  - trainers/gpt2-small.yaml
+  - ../user_datasets/__DATASET_ID__.yaml
+  - ../models/mistral-small.yaml
+  - ../trainers/gpt2-small.yaml
 
-run_id: full-rule-run
+run_id: __DATASET_ID__
 
 artifacts:
-  cache_dir: ./cache
-  run_dir: ./runs/full-rule-run
+  cache_dir: CACHE_PATH/__DATASET_ID__
+  run_dir: CHECKPOINT_PATH/__DATASET_ID__
 
 effective_bsz: 8
 
@@ -17,20 +17,20 @@ resume_checkpoint: null
 checkpoint_frequency:
   - [100, 1000]
   - [500, 5000]
+  - [1000, 10000]
 
 seed: 42
 
 training_arguments:
-  max_steps: 2000
+  max_steps: 10000
   per_device_train_batch_size: 2
   gradient_accumulation_steps: 4
   logging_steps: 10
   eval_steps: 200
   save_steps: 200
-  fp16: false
-  learning_rate: 5e-4
   weight_decay: 0.01
-  warmup_steps: 100
+  warmup_steps: 1000
   lr_scheduler_type: linear
   prediction_loss_only: true
-  dataloader_num_workers: 0
+  dataloader_num_workers: 2
+  fp16: true

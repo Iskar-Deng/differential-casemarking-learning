@@ -13,7 +13,7 @@ from utils import DATA_PATH, MODEL_PATH
 # -------------------- Config --------------------
 csv_path = os.path.join(DATA_PATH, "training_data_split.csv")
 num_labels = 4
-epochs = 4
+epochs = 10
 batch_size = 16
 lr = 2e-5
 max_length = 128
@@ -88,7 +88,7 @@ for epoch in range(epochs):
 # -------------------- Save Model --------------------
 save_dir = os.path.join(MODEL_PATH, "animacy_bert_model")
 os.makedirs(save_dir, exist_ok=True)
-model.save_pretrained(save_dir)
+model.save_pretrained(save_dir, safe_serialization=False)
 tokenizer.save_pretrained(save_dir)
 print(f"Model saved to {save_dir}")
 
