@@ -9,6 +9,7 @@ artifacts/
 cache/
 runs/
 wandb/
+checkpoints/
 models/
 *.arrow
 *.lock

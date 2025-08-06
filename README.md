@@ -102,20 +102,63 @@ python -m data_processing.generate_vad
 
 ---
 
-### 8. Prepare BLiMP
+### 8. Prepare the config for training
+```bash
+python -m tools.generate_configs 
+``` 
+
+---
+
+### 9. Train the model
+```bash
+python mistral/train.py --config mistral/conf/user_main/rule_A+P.yaml
+python mistral/train.py --config mistral/conf/user_main/rule_A+P_with_invalid.yaml
+python mistral/train.py --config mistral/conf/user_main/rule_full.yaml
+python mistral/train.py --config mistral/conf/user_main/rule_none.yaml
+python mistral/train.py --config mistral/conf/user_main/rule_none_with_invalid.yaml
+python mistral/train.py --config mistral/conf/user_main/rule_A_only.yaml
+python mistral/train.py --config mistral/conf/user_main/rule_P_only.yaml
+python mistral/train.py --config mistral/conf/user_main/heuristic_A+P.yaml
+``` 
+
+### 10. Experiment 1 - ppl
+```bash
+python -m evaluation.eval_ppl --run-id rule_A+P
+python -m evaluation.eval_ppl --run-id rule_full
+...
+MPLBACKEND=Agg python evaluation/plot_ppl_curves.py \
+    --runs rule_A+P rule_A+P_with_invalid rule_none rule_none_with_invalid rule_full \
+    --out results/ppl_comparison.png
+```             
+---
+
+### 11. Experiment 2 - Minipairs
+
+#### Prepare the pairs
 ```bash
 python -m evaluation.perturb_blimp_pairs \
-  --blimp evaluation/BLiMP_raw/regular_plural_subject_verb_agreement_1.jsonl \
-  --out evaluation/BLiMP/regular_plural_subject_verb_agreement_1.jsonl \
+  --blimp evaluation/BLiMP_raw/animate_subject_trans.jsonl \
+  --out evaluation/BLiMP_perturbed/animate_subject_trans \
   --mode rule \
   --strategy A+P
+
+python -m evaluation.casemarking.generate_minipair --mode rule --strategy A+P --limit 1000 
 ```
 
-### Select human check examples
+#### Eval the pairs
 ```bash
-python3 -m data_processing.human_spot_check --num_lines 50 --seed 42
+python -m evaluation.eval_minipairs \
+    --run-id rule_A+P \
+    --jsonl evaluation/casemarking/rule_A+P/cbt_minimal_pairs.jsonl \
+    --out-dir results_raw_mp
 ```
 
+#### Draw
+```bash
+MPLBACKEND=Agg python evaluation/plot_minipair_accuracy.py \
+    --result-dir results_blipmp/animate_subject_trans \
+    --out plots/animate_subject_trans_accuracy.png
+```
 ## Structure
 
 ```

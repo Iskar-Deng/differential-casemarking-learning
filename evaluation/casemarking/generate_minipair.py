@@ -64,17 +64,17 @@ def apply_spans_to_tokens(tokens, spans):
     return " ".join(output)
 
 def process_minimal_pairs(mode="rule", strategy="A+P", limit=None):
-    assert strategy in {"A+P", "A_only", "P_only"}
+    assert strategy in {"A+P", "A_only", "P_only", "full"}
 
     structured_dir = os.path.join(DATA_PATH, "structured")
     output_dir = os.path.join(EVALUATION_PATH, f"casemarking/{mode}_{strategy}")
     os.makedirs(output_dir, exist_ok=True)
 
-    jsonl_files = [f for f in os.listdir(structured_dir) if f.endswith("cbt_parsed_verbs.jsonl")]
+    jsonl_files = [f for f in os.listdir(structured_dir) if f.endswith("cbt.jsonl")]
     if len(jsonl_files) != 1:
         raise ValueError(f"Expected one _verbs.jsonl file, found: {jsonl_files}")
     input_path = os.path.join(structured_dir, jsonl_files[0])
-    prefix = jsonl_files[0].replace("_parsed_verbs.jsonl", "")
+    prefix = os.path.splitext(jsonl_files[0])[0]
     out_jsonl = os.path.join(output_dir, f"{prefix}_minimal_pairs.jsonl")
 
     jsonl_pairs = []
@@ -108,42 +108,35 @@ def process_minimal_pairs(mode="rule", strategy="A+P", limit=None):
                 obj_cat = predict_animacy(sentence, obj["text"])
                 animacy_pairs[(subj_cat, obj_cat)] += 1
 
-                if (
+                do_perturb = (
+                    strategy == "full" or
                     (mode == "rule" and should_perturb_rule(subj_cat, obj_cat)) or
                     (mode == "heuristic" and should_perturb_heuristic(subj_cat))
-                ):
-                    spans = []
-                    if strategy in {"A+P", "A_only"}:
-                        subj_marked = dict(subj)
-                        subj_marked["text"] += f" {AGENT_MARK}"
-                        spans.append(subj_marked)
-                    if strategy in {"A+P", "P_only"}:
-                        obj_marked = dict(obj)
-                        obj_marked["text"] += f" {PATIENT_MARK}"
-                        spans.append(obj_marked)
+                )
+
+                spans = []
+                if strategy in {"A+P", "A_only", "full"}:
+                    s = dict(subj)
+                    s["text"] += f" {AGENT_MARK}"
+                    spans.append(s)
+                if strategy in {"A+P", "P_only", "full"}:
+                    o = dict(obj)
+                    o["text"] += f" {PATIENT_MARK}"
+                    spans.append(o)
+
+                if do_perturb:
                     good = apply_spans_to_tokens(tokens, spans)
                     bad = sentence
                 else:
-                    spans = []
-                    if strategy in {"A+P", "A_only"}:
-                        subj_marked = dict(subj)
-                        subj_marked["text"] += f" {AGENT_MARK}"
-                        spans.append(subj_marked)
-                    if strategy in {"A+P", "P_only"}:
-                        obj_marked = dict(obj)
-                        obj_marked["text"] += f" {PATIENT_MARK}"
-                        spans.append(obj_marked)
                     bad = apply_spans_to_tokens(tokens, spans)
                     good = sentence
 
                 jsonl_pairs.append({"sentence_good": good, "sentence_bad": bad})
 
-    # Write to file
     with open(out_jsonl, "w", encoding="utf-8") as f:
         for item in jsonl_pairs:
             f.write(json.dumps(item, ensure_ascii=False) + "\n")
 
-    # Print stats
     print(f"\nMode: {mode} | Strategy: {strategy}")
     print(f"Minimal pairs written: {len(jsonl_pairs)}")
     print(f"Saved to: {out_jsonl}")
@@ -156,7 +149,7 @@ def process_minimal_pairs(mode="rule", strategy="A+P", limit=None):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--mode", type=str, choices=["rule", "heuristic"], default="rule")
-    parser.add_argument("--strategy", type=str, choices=["A+P", "A_only", "P_only"], default="A+P")
+    parser.add_argument("--strategy", type=str, choices=["A+P", "A_only", "P_only", "full"], default="A+P")
     parser.add_argument("--limit", type=int, default=None, help="Maximum number of minimal pairs")
     args = parser.parse_args()
     process_minimal_pairs(mode=args.mode, strategy=args.strategy, limit=args.limit)

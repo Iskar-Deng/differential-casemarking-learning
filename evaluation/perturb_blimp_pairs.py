@@ -4,6 +4,7 @@ import argparse
 from collections import defaultdict, Counter
 from functools import lru_cache
 from tqdm import tqdm
+from pathlib import Path
 
 import spacy
 from benepar import BeneparComponent  # noqa: F401 (ensures model is available)
@@ -220,21 +221,26 @@ def perturb_one_sentence(sentence: str, mode: str, strategy: str):
         subj_cat = predict_animacy(sentence_text, subj["text"])
         obj_cat = predict_animacy(sentence_text, obj["text"])
 
-        do_mark = (
-            (mode == "rule" and should_perturb_rule(subj_cat, obj_cat)) or
-            (mode == "heuristic" and should_perturb_heuristic(subj_cat))
-        )
+        if strategy == "full":
+            do_mark = True
+        else:
+            do_mark = (
+                (mode == "rule" and should_perturb_rule(subj_cat, obj_cat)) or
+                (mode == "heuristic" and should_perturb_heuristic(subj_cat))
+            )
+
         if not do_mark:
             continue
 
-        if strategy in {"A+P", "A_only"}:
+        if strategy in {"A+P", "A_only", "full"}:
             s = dict(subj)
             s["text"] += f" {AGENT_MARK}"
             spans.append(s)
-        if strategy in {"A+P", "P_only"}:
+        if strategy in {"A+P", "P_only", "full"}:
             o = dict(obj)
             o["text"] += f" {PATIENT_MARK}"
             spans.append(o)
+
 
     if not any_valid:
         return None, False
@@ -301,10 +307,22 @@ def process_blimp(jsonl_path: str, out_path: str, mode: str, strategy: str, limi
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--blimp", type=str, required=True, help="Path to BLiMP *.jsonl (with sentence_good/sentence_bad)")
-    parser.add_argument("--out", type=str, required=True, help="Output path for processed pairs")
+    parser.add_argument("--out", type=str, required=True, help="Output path or directory for processed pairs")
     parser.add_argument("--mode", type=str, choices=["rule", "heuristic"], default="rule")
-    parser.add_argument("--strategy", type=str, choices=["A+P", "A_only", "P_only"], default="A+P")
+    parser.add_argument("--strategy", type=str, choices=["A+P", "A_only", "P_only", "full"], default="A+P")
     parser.add_argument("--limit", type=int, default=None)
     args = parser.parse_args()
 
-    process_blimp(args.blimp, args.out, mode=args.mode, strategy=args.strategy, limit=args.limit)
+    blimp_name = Path(args.blimp).stem
+    suffix = f"{args.mode}_{args.strategy}"
+    out_path = Path(args.out)
+
+    if out_path.is_dir() or not out_path.suffix:
+        out_path.mkdir(parents=True, exist_ok=True)
+        final_out = out_path / f"{blimp_name}_{suffix}.jsonl"
+    else:
+        final_out = out_path.with_name(f"{out_path.stem}_{suffix}.jsonl")
+        final_out.parent.mkdir(parents=True, exist_ok=True)
+
+    process_blimp(args.blimp, str(final_out), mode=args.mode, strategy=args.strategy, limit=args.limit)
+
