@@ -18,7 +18,11 @@ We ues BabyLM, available at: [https://babylm.github.io/](#)
 ## Setup
 
 ### 1. Install Dependencies
+```bash
+conda env create -f environment.yml
+```
 
+Disabled:
 ```bash
 pip install -r requirements.txt
 pip install spacy benepar torch transformers tqdm protobuf==3.20.*
