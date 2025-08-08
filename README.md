@@ -11,14 +11,13 @@ We construct an English corpus that simulates a Naxi-style relational case syste
 
 ## Datasets
 
-From the BabyLM 100M clean subset:
-
-> https://huggingface.co/datasets/cambridge-climb/BabyLM/tree/main/clean/100M  
-We use: `cbt.txt`
+We ues BabyLM, available at: [https://babylm.github.io/](#)
 
 ---
 
 ## Setup
+
+### 1. Install Dependencies
 
 ```bash
 pip install -r requirements.txt
@@ -28,13 +27,46 @@ python -c "import nltk; nltk.download('wordnet')"
 python -c "import benepar; benepar.download('benepar_en3')"
 ```
 
-Set your data path by editing `utils.py`:
+---
 
-```python
-DATA_PATH = "/your/local/data/directory"
+### 2. Clone and Setup **Mistral**
+
+Follow the official Mistral instructions strictly: [https://nlp.stanford.edu/mistral/index.html](https://nlp.stanford.edu/mistral/index.html)
+
+```bash
+git clone https://github.com/stanford-crfm/mistral.git
 ```
 
 ---
+
+### 3. Configure Paths
+
+Edit `utils.py` and set the following variables:  
+
+```python
+# Path to datasets
+DATA_PATH = "/absolute/path/to/data"
+
+# Path to store trained models
+MODEL_PATH = "/absolute/path/to/models"
+
+# Path to cloned Mistral framework folder
+MISTRAL_PATH = "/absolute/path/to/mistral"
+
+# Paths for cache and checkpoints (can be any writable local folder)
+CACHE_PATH = "/absolute/path/to/cache"
+CHECKPOINT_PATH = "/absolute/path/to/checkpoints"
+
+# Config and evaluation paths (use absolute paths from cloned repo)
+CONFIG_PATH = "/absolute/path/to/mistral/configs"
+EVALUATION_PATH = "/absolute/path/to/mistral/evaluation"
+```
+
+**Notes:**
+- `DATA_PATH` is where your datasets (e.g., BabyLM) are stored.
+- `MODEL_PATH`, `CACHE_PATH`, `CHECKPOINT_PATH` can be any local directories for saving outputs and temporary files.
+- `CONFIG_PATH` and `EVALUATION_PATH` should point to the **configs** and **evaluation** directories in this repo.
+- `MISTRAL_PATH` is the root folder of your cloned `mistral` repository.
 
 ## Run the Pipeline
 
