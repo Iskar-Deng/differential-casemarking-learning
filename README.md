@@ -85,6 +85,7 @@ Make sure only one `.txt` file exists under `raw/`.
 ### 2. Filter noisy or irrelevant sentences
 
 ```bash
+python3 -m data_processing.prepreprocess
 python3 -m data_processing.filter_sentences
 ```
 
@@ -106,9 +107,9 @@ python3 -m perturbation.extract_verb
 
 ---
 
-### 5. Train Animacy Classifer
+### 5. Train Animacy Classifer (Set your openai api into env first)
 ```bash
-python3 -m animacy_classifer.extract_verb
+python -m animacy_classifer.generate_training_data --max 10000         
 python -m animacy_classifer.train_classifer   
 ```
 
@@ -185,25 +186,9 @@ python -m evaluation.eval_minipairs \
     --out-dir results_raw_mp
 ```
 
-#### Draw
+#### Draw the plot
 ```bash
 MPLBACKEND=Agg python evaluation/plot_minipair_accuracy.py \
     --result-dir results_blipmp/animate_subject_trans \
     --out plots/animate_subject_trans_accuracy.png
-```
-## Structure
-
-```
-.
-├── data_processing/
-│   ├── download_babylm.py         # Download BabyLM corpus
-│   ├── filter_sentences.py        # Filter sentences by length
-│   └── human_spot_check.py        # Randomly select lines for spot-check
-├── perturbation/
-│   ├── parse.py                   # Run spaCy + benepar parsing
-│   ├── extract_verb.py            # Extract SVO and span structures
-│   └── perturb.py                 # Inject case markers based on animacy
-├── utils.py                       # Global path / markers / animacy functions
-├── requirements.txt
-└── ...
 ```

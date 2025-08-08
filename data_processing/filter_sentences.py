@@ -5,7 +5,7 @@ import os
 import sys
 from utils import DATA_PATH
 
-def filter_babylm_sentences(min_len=5, max_len=15):
+def filter_babylm_sentences(min_len=5, max_len=25):
     raw_dir = os.path.join(DATA_PATH, "raw")
     filtered_dir = os.path.join(DATA_PATH, "filtered")
     os.makedirs(filtered_dir, exist_ok=True)
@@ -27,10 +27,6 @@ def filter_babylm_sentences(min_len=5, max_len=15):
     for line in lines:
         line = line.strip()
         if not line:
-            continue
-        if line.lower().startswith("_book_title_") or \
-           line.lower().startswith("chapter") or \
-           line.lower().startswith("-lcb-"):
             continue
         tokens = line.split()
         if min_len <= len(tokens) <= max_len:
