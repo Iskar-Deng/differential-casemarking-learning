@@ -2,12 +2,12 @@
 
 # === Constants ===
 
-DATA_PATH = "data"
-MODEL_PATH = "models"
-CONFIG_PATH = "configs"
+DATA_PATH = "/home/hd49/relational-casemarking-learning/data"
+MODEL_PATH = "/home/hd49/relational-casemarking-learning/models"
+CONFIG_PATH = "/home/hd49/relational-casemarking-learning/configs"
 MISTRAL_PATH = "mistral"
-CHECKPOINT_PATH = "checkpoints"
-CACHE_PATH = "cache"
+CHECKPOINT_PATH = "/home/hd49/relational-casemarking-learning/checkpoints"
+CACHE_PATH = "/home/hd49/relational-casemarking-learning/cache"
 EVALUATION_PATH = "evaluation"
 
 AGENT_MARK = "🄰"

@@ -33,16 +33,6 @@ python -c "import benepar; benepar.download('benepar_en3')"
 
 ---
 
-### 2. Clone and Setup **Mistral**
-
-Follow the official Mistral instructions strictly: [https://nlp.stanford.edu/mistral/index.html](https://nlp.stanford.edu/mistral/index.html)
-
-```bash
-git clone https://github.com/stanford-crfm/mistral.git
-```
-
----
-
 ### 3. Configure Paths
 
 Edit `utils.py` and set the following variables:  
@@ -87,9 +77,8 @@ Make sure only one `.txt` file exists under `raw/`.
 ---
 
 ### 2. Filter noisy or irrelevant sentences
-
 ```bash
-python3 -m data_processing.prepreprocess
+python -m data_processing.split_corpus
 python3 -m data_processing.filter_sentences
 ```
 
@@ -114,7 +103,7 @@ python3 -m perturbation.extract_verb
 ### 5. Train Animacy Classifer (Set your openai api into env first)
 ```bash
 python -m animacy_classifer.generate_training_data --max 10000         
-python -m animacy_classifer.train_classifer   
+python3 -m animacy_classifer.train_classifer --amp 
 ```
 
 ---
@@ -126,8 +115,8 @@ python -m perturbation.perturb_with_model --mode rule --strategy A+P
 python -m perturbation.perturb_with_model --mode heuristic --strategy A+P
 python -m perturbation.perturb_with_model --mode rule --strategy A_only
 python -m perturbation.perturb_with_model --mode rule --strategy P_only
-python -m perturbation.perturb_with_model --mode rule --strategy none
-python -m perturbation.perturb_with_model --mode rule --strategy full
+python -m perturbation.perturb_with_model --mode none --strategy A+P
+python -m perturbation.perturb_with_model --mode full --strategy A+P
 ```
 
 ---

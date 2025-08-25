@@ -5,6 +5,7 @@ __pycache__/
 mistral/
 bash/
 Miniconda3-latest-Linux-x86_64.sh
+cuda-keyring_1.1-1_all.deb
 artifacts/
 cache/
 runs/
