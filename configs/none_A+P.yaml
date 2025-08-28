@@ -1,4 +1,4 @@
-run_id: rule_A+P
+run_id: none_A+P
 model_name: gpt2
 effective_bsz: 96
 seed: 42
@@ -6,16 +6,18 @@ block_size: 1024
 resume: true
 resume_checkpoint: null
 checkpoint_frequency:
-- - 50
-  - 500
 - - 100
   - 1000
+- - 500
+  - 5000
+- - 1000
+  - 10000
 artifacts:
-  cache_dir: /home/hd49/relational-casemarking-learning/cache/rule_A+P
-  run_dir: /home/hd49/relational-casemarking-learning/checkpoints/rule_A+P
+  cache_dir: /home/hd49/relational-casemarking-learning/cache/none_A+P
+  run_dir: /home/hd49/relational-casemarking-learning/checkpoints/none_A+P
 training_arguments:
-  max_steps: 2000
-  per_device_train_batch_size: 4
+  max_steps: 8000
+  per_device_train_batch_size: 8
   optim: adamw_torch_fused
   bf16: true
   fp16: false
@@ -26,8 +28,8 @@ training_arguments:
   warmup_ratio: 0.03
   lr_scheduler_type: cosine
   logging_steps: 50
-  eval_steps: 50
-  save_steps: 50
+  eval_steps: 1000
+  save_steps: 1000
   save_total_limit: 3
   evaluation_strategy: steps
   save_strategy: steps
@@ -41,8 +43,6 @@ training_arguments:
   - tensorboard
 data:
   train_files:
-  - /home/hd49/relational-casemarking-learning/data/perturbed_model/rule_A+P/wiki_all_train_affected.txt
-  - /home/hd49/relational-casemarking-learning/data/perturbed_model/rule_A+P/wiki_all_train_unaffected.txt
+  - /home/hd49/relational-casemarking-learning/data/perturbed_model/none_A+P/wiki_all_train_unaffected.txt
   eval_files:
-  - /home/hd49/relational-casemarking-learning/data/perturbed_model/rule_A+P/wiki_all_valid_affected.txt
-  - /home/hd49/relational-casemarking-learning/data/perturbed_model/rule_A+P/wiki_all_valid_unaffected.txt
+  - /home/hd49/relational-casemarking-learning/data/perturbed_model/none_A+P/wiki_all_valid_unaffected.txt

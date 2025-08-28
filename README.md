@@ -121,30 +121,16 @@ python -m perturbation.perturb_with_model --mode full --strategy A+P
 
 ---
 
-### 7. Generate train and vad
-```bash
-python -m data_processing.generate_vad
-``` 
-
----
-
 ### 8. Prepare the config for training
 ```bash
-python -m tools.generate_configs 
+python -m tools.generate_yaml --mode rule --strategy A+P --overwrite 
 ``` 
 
 ---
 
 ### 9. Train the model
 ```bash
-python mistral/train.py --config mistral/conf/user_main/rule_A+P.yaml
-python mistral/train.py --config mistral/conf/user_main/rule_A+P_with_invalid.yaml
-python mistral/train.py --config mistral/conf/user_main/rule_full.yaml
-python mistral/train.py --config mistral/conf/user_main/rule_none.yaml
-python mistral/train.py --config mistral/conf/user_main/rule_none_with_invalid.yaml
-python mistral/train.py --config mistral/conf/user_main/rule_A_only.yaml
-python mistral/train.py --config mistral/conf/user_main/rule_P_only.yaml
-python mistral/train.py --config mistral/conf/user_main/heuristic_A+P.yaml
+python -m training.train_lm --mode rule --strategy A+P  
 ``` 
 
 ### 10. Experiment 1 - ppl

@@ -17,22 +17,33 @@ from utils import DATA_PATH, MODEL_PATH
 
 # -------------------- Utils --------------------
 def set_seed(seed=42):
-    random.seed(seed); np.random.seed(seed); torch.manual_seed(seed)
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
     torch.cuda.manual_seed_all(seed)
     torch.backends.cudnn.deterministic = False
     torch.backends.cudnn.benchmark = True
 
+
 def auto_pick_csv():
+    """自动寻找 data 目录下的 training_data_*valid*.csv"""
     candidates = [
-        os.path.join(DATA_PATH, "training_data_valid.csv"),
-        os.path.join(DATA_PATH, "training_data_train.csv"),
-        os.path.join(DATA_PATH, "training_data_test.csv"),
-        os.path.join(DATA_PATH, "training_data_split.csv"),  # 兼容旧名
+        os.path.join(DATA_PATH, "training_data_valid.csv"),  # 旧版名字
     ]
+    # 优先直接命中的
     for p in candidates:
         if os.path.exists(p):
             return p
-    return candidates[0]  # 默认 valid
+
+    # 后缀搜索（只匹配包含 'valid' 的 CSV）
+    for fname in os.listdir(DATA_PATH):
+        if fname.endswith(".csv") and "valid" in fname:
+            return os.path.join(DATA_PATH, fname)
+
+    raise FileNotFoundError(
+        f"No training_data_*valid*.csv found in {DATA_PATH}. Please generate training data first."
+    )
+
 
 # -------------------- Dataset --------------------
 class AnimacyDataset(Dataset):
@@ -46,7 +57,7 @@ class AnimacyDataset(Dataset):
 
     def __getitem__(self, idx):
         row = self.df.iloc[idx]
-        # 句子 + [NP] + 短语
+        # 输入形式：句子 + [NP] + 短语
         text = f"{row['sentence']} [NP] {row['np']}"
         label = int(row["animacy"])  # 确保是 int
 
@@ -58,12 +69,12 @@ class AnimacyDataset(Dataset):
             padding="max_length",
             return_tensors="pt",
         )
-        item = {
+        return {
             "input_ids": enc["input_ids"].squeeze(0),
             "attention_mask": enc["attention_mask"].squeeze(0),
             "labels": torch.tensor(label, dtype=torch.long),  # CE 要 long
         }
-        return item
+
 
 # -------------------- Main --------------------
 def main(args):
@@ -80,14 +91,13 @@ def main(args):
         raise FileNotFoundError(f"Training CSV not found: {csv_path}")
     print(f"[INFO] Using CSV: {csv_path}")
 
-    # 读取、清洗
+    # 读取 & 清洗
     df = pd.read_csv(csv_path)
     need_cols = {"sentence", "np", "np_role", "animacy"}
     missing = need_cols - set(df.columns)
     if missing:
         raise ValueError(f"CSV missing columns: {missing}")
 
-    # 只保留合法标签，去重 & 去空
     df = df[df["animacy"].isin(label_map.keys())].copy()
     df.dropna(subset=["sentence", "np", "animacy"], inplace=True)
     df.drop_duplicates(subset=["sentence", "np", "np_role", "animacy"], inplace=True)
@@ -110,10 +120,10 @@ def main(args):
     )
     print(f"[INFO] Train size={len(train_df)}, Test size={len(test_df)}")
 
-    # Tokenizer & Dataset/DataLoader
+    # Tokenizer & Dataset
     tokenizer = BertTokenizer.from_pretrained("bert-base-uncased")
     train_ds = AnimacyDataset(train_df, tokenizer, args.max_length)
-    test_ds  = AnimacyDataset(test_df, tokenizer, args.max_length)
+    test_ds = AnimacyDataset(test_df, tokenizer, args.max_length)
 
     train_loader = DataLoader(
         train_ds, batch_size=args.batch_size, shuffle=True,
@@ -132,7 +142,7 @@ def main(args):
     optimizer = AdamW(model.parameters(), lr=args.lr)
     scaler = torch.cuda.amp.GradScaler(enabled=args.amp and device.type == "cuda")
 
-    # 训练
+    # Training
     model.train()
     for epoch in range(1, args.epochs + 1):
         total_loss = 0.0
@@ -164,7 +174,7 @@ def main(args):
     # 保存
     save_dir = os.path.join(MODEL_PATH, "animacy_bert_model")
     os.makedirs(save_dir, exist_ok=True)
-    model.save_pretrained(save_dir, safe_serialization=False)  # 兼容老环境
+    model.save_pretrained(save_dir, safe_serialization=False)
     tokenizer.save_pretrained(save_dir)
     print(f"[INFO] Model saved to: {save_dir}")
 
@@ -191,9 +201,11 @@ def main(args):
         digits=4
     ))
 
+
 if __name__ == "__main__":
     ap = argparse.ArgumentParser()
-    ap.add_argument("--csv", type=str, default=None, help="Path to training CSV. Default: auto-pick under DATA_PATH.")
+    ap.add_argument("--csv", type=str, default=None,
+                    help="Path to training CSV. Default: auto-pick training_data_*valid*.csv under DATA_PATH.")
     ap.add_argument("--epochs", type=int, default=10)
     ap.add_argument("--batch_size", type=int, default=16)
     ap.add_argument("--lr", type=float, default=2e-5)

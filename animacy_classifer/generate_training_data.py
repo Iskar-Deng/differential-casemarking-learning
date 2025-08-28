@@ -9,6 +9,7 @@ from utils import DATA_PATH
 # 读取 OPENAI_API_KEY（需先 export OPENAI_API_KEY=...）
 client = OpenAI()
 
+
 def call_openai_chat(sentence: str, np: str, np_type: str, model: str = "gpt-4o") -> str | None:
     prompt = f"""Classify the animacy of the following NP. Answer with one of the categories: "human", "animal", "inanimate", or "event". Answer in a single word without quotes.
 
@@ -29,28 +30,26 @@ Respond with one of the following categories:
             max_tokens=2,
         )
         result = (resp.choices[0].message.content or "").strip().lower().replace('"', "")
-        # 只保留四个合法标签
         if result in {"human", "animal", "inanimate", "event"}:
             return result
-        # 容错：取首词并再判断一次
         head = (result.split() or [""])[0]
         return head if head in {"human", "animal", "inanimate", "event"} else None
     except Exception as e:
-        # 不中断主流程
         print(f"[ERROR - OpenAI] {type(e).__name__}: {e}")
         return None
 
+
 def is_valid_structure(entry: dict) -> bool:
-    # 需要有 subject 且恰好一个 object
     return bool(entry.get("subject")) and len(entry.get("objects", [])) == 1
+
 
 def count_existing_examples(csv_path: str) -> int:
     if not os.path.exists(csv_path) or os.path.getsize(csv_path) == 0:
         return 0
     with open(csv_path, encoding="utf-8") as f:
-        # 第一行是表头
         n = sum(1 for _ in f) - 1
     return max(0, n)
+
 
 def ensure_csv_with_header(path: str):
     if not os.path.exists(path) or os.path.getsize(path) == 0:
@@ -58,13 +57,33 @@ def ensure_csv_with_header(path: str):
             writer = csv.DictWriter(fout, fieldnames=["sentence", "np", "np_role", "animacy"])
             writer.writeheader()
 
+
+def find_input_file(structured_dir: str, suffix: str) -> str:
+    """在 structured_dir 下寻找第一个以 suffix 结尾的文件"""
+    for f in sorted(os.listdir(structured_dir)):
+        if f.endswith(suffix):
+            return os.path.join(structured_dir, f)
+    raise FileNotFoundError(f"No file ending with '{suffix}' found in {structured_dir}")
+
+
 def extract_training_data(max_instances: int = 2000, input_file: str = "valid_verbs.jsonl", model: str = "gpt-4o"):
     structured_dir = os.path.join(DATA_PATH, "structured")
-    input_path = os.path.join(structured_dir, input_file)
+
+    # 处理输入文件
+    if os.path.isfile(input_file):
+        input_path = input_file
+        input_file = os.path.basename(input_file)
+    else:
+        input_path = os.path.join(structured_dir, input_file)
+        if not os.path.exists(input_path):
+            print(f"[WARN] {input_path} not found, trying suffix search...")
+            input_path = find_input_file(structured_dir, input_file)
+            input_file = os.path.basename(input_path)
+
     if not os.path.exists(input_path):
         raise FileNotFoundError(f"{input_path} not found")
 
-    stem = os.path.splitext(input_file)[0]  # e.g., valid_verbs
+    stem = os.path.splitext(input_file)[0]
     out_csv = os.path.join(DATA_PATH, f"training_data_{stem.replace('_verbs','')}.csv")
 
     ensure_csv_with_header(out_csv)
@@ -102,33 +121,20 @@ def extract_training_data(max_instances: int = 2000, input_file: str = "valid_ve
 
                 subj = entry["subject"]
                 obj = entry["objects"][0]
-                # 跳过 clausal object
                 if obj.get("dep") == "ccomp":
                     continue
 
-                # subject
                 if count < max_instances:
                     r = call_openai_chat(sentence, subj.get("text", ""), "Subject", model=model)
                     if r:
-                        writer.writerow({
-                            "sentence": sentence,
-                            "np": subj.get("text", ""),
-                            "np_role": "subject",
-                            "animacy": r
-                        })
+                        writer.writerow({"sentence": sentence, "np": subj.get("text", ""), "np_role": "subject", "animacy": r})
                         fout.flush()
                         count += 1
 
-                # object
                 if count < max_instances:
                     r = call_openai_chat(sentence, obj.get("text", ""), "Object", model=model)
                     if r:
-                        writer.writerow({
-                            "sentence": sentence,
-                            "np": obj.get("text", ""),
-                            "np_role": "object",
-                            "animacy": r
-                        })
+                        writer.writerow({"sentence": sentence, "np": obj.get("text", ""), "np_role": "object", "animacy": r})
                         fout.flush()
                         count += 1
 
@@ -138,14 +144,11 @@ def extract_training_data(max_instances: int = 2000, input_file: str = "valid_ve
     print(f"[DONE] Added {count - existing} new examples; total now {count} rows in {out_csv}")
     return out_csv
 
+
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Generate animacy training data with resume support (single file).")
-    parser.add_argument("--max", type=int, default=4000,
-                        help="Total number of NP examples to generate (including existing)")
-    parser.add_argument("--file", type=str, default="valid_verbs.jsonl",
-                        help="Which structured verbs file to use (default: valid_verbs.jsonl)")
-    parser.add_argument("--model", type=str, default="gpt-4o",
-                        help="OpenAI model name (default: gpt-4o)")
+    parser = argparse.ArgumentParser(description="Generate animacy training data with resume support (auto suffix search).")
+    parser.add_argument("--max", type=int, default=4000, help="Total number of NP examples to generate (including existing)")
+    parser.add_argument("--file", type=str, default="valid_verbs.jsonl", help="Structured verbs file (can be suffix like '_verbs.jsonl')")
+    parser.add_argument("--model", type=str, default="gpt-4o", help="OpenAI model name (default: gpt-4o)")
     args = parser.parse_args()
     extract_training_data(max_instances=args.max, input_file=args.file, model=args.model)
-
