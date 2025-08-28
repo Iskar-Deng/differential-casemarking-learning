@@ -64,7 +64,7 @@ def extract_verb_arguments(tokens):
     children = build_children_index(tokens)
 
     # spaCy 把 be/do/have 多为 AUX，这里也当谓词
-    verbs = [t for t in tokens if t.get("pos") in {"VERB", "AUX"}]
+    verbs = [t for t in tokens if t.get("pos") in {"VERB"}]
 
     results = []
     for verb in verbs:
