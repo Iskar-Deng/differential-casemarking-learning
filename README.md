@@ -33,7 +33,7 @@ python -c "import benepar; benepar.download('benepar_en3')"
 
 ---
 
-### 3. Configure Paths
+### 2. Configure Paths
 
 Edit `utils.py` and set the following variables:  
 
@@ -102,8 +102,10 @@ python3 -m perturbation.extract_verb
 
 ### 5. Train Animacy Classifer (Set your openai api into env first)
 ```bash
-python -m animacy_classifer.generate_training_data --max 10000         
-python3 -m animacy_classifer.train_classifer --amp 
+python -m classifiers.generate_data --task animacy --max 5000 --strategy random
+python -m classifiers.generate_data --task npdef --max 5000 --strategy balanced           
+python -m classifiers.train_classifier --task animacy --epochs 10 --amp
+python -m classifiers.train_classifier --task npdef --epochs 10 --amp
 ```
 
 ---
@@ -111,12 +113,10 @@ python3 -m animacy_classifer.train_classifer --amp
 ### 6. Inject animacy-based case markers
 
 ```bash
-python -m perturbation.perturb_with_model --mode rule --strategy A+P 
-python -m perturbation.perturb_with_model --mode heuristic --strategy A+P
-python -m perturbation.perturb_with_model --mode rule --strategy A_only
-python -m perturbation.perturb_with_model --mode rule --strategy P_only
-python -m perturbation.perturb_with_model --mode none --strategy A+P
-python -m perturbation.perturb_with_model --mode full --strategy A+P
+python -m perturbation.run_perturb \
+  --strategy local \
+  --A_mode none --A_markedness forward \
+  --P_mode animal-p12 --P_markedness forward-inverse
 ```
 
 ---
@@ -163,6 +163,23 @@ python -m evaluation.eval_minipairs \
     --run-id rule_A+P \
     --jsonl evaluation/casemarking/rule_A+P/cbt_minimal_pairs.jsonl \
     --out-dir results_raw_mp
+```
+
+#### Single Eval
+```bash
+python -m evaluation.eval_single_ckpt \
+  --checkpoint /home/hd49/relational-casemarking-learning/checkpoints/local_Anone-forward_Panimal-forward/checkpoint-4000 \
+  --jsonl /home/hd49/relational-casemarking-learning/evaluation/casemarking/local_Anone-forward_Panimal-forward/test_minimal_pairs.jsonl \
+  --batch-size 16 \
+  --fp16 \
+  --save-details results/1.jsonl
+
+python -m evaluation.eval_single_ckpt \
+  --checkpoint /home/hd49/relational-casemarking-learning/checkpoints/rule_A+P_with_invalid/checkpoint-2000 \
+  --jsonl /home/hd49/relational-casemarking-learning/evaluation/casemarking/rule_A+P/cbt_minimal_pairs.jsonl \
+  --batch-size 16 \
+  --fp16 \
+  --save-details results/rule_A+P_with_invalid_2000.jsonl
 ```
 
 #### Draw the plot

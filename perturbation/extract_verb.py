@@ -63,7 +63,6 @@ def extract_verb_arguments(tokens):
     id_to_token = {t["id"]: t for t in tokens if isinstance(t.get("id"), int)}
     children = build_children_index(tokens)
 
-    # spaCy 把 be/do/have 多为 AUX，这里也当谓词
     verbs = [t for t in tokens if t.get("pos") in {"VERB"}]
 
     results = []

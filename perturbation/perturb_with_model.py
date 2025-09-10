@@ -17,8 +17,8 @@ if torch.backends.cudnn.is_available():
 
 # ---------------- Config ----------------
 MODEL_DIR = os.path.join(MODEL_PATH, "animacy_bert_model")
-LABEL_MAP = {0: "human", 1: "animal", 2: "inanimate", 3: "event"}
-ANIMACY_RANK = {"human": 3, "animal": 2, "inanimate": 1, "event": 0}
+LABEL_MAP = {0: "human", 1: "animal", 2: "inanimate"}
+ANIMACY_RANK = {"human": 3, "animal": 2, "inanimate": 1}
 
 # ---------------- Model ----------------
 if not os.path.isdir(MODEL_DIR):

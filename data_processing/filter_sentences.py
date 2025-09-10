@@ -24,18 +24,20 @@ def regex_sentencize(text: str):
     return [s.strip() for s in re.split(r'(?<=[.!?])\s+', text) if s.strip()]
 
 
-def filter_sentences(min_len=5, max_len=25, split_mode="spacy"):
+def filter_sentences(min_len=5, max_len=25, split_mode="spacy", only=None, overwrite=False):
     raw_dir = Path(DATA_PATH) / "raw"
     filtered_dir = Path(DATA_PATH) / "filtered"
     filtered_dir.mkdir(parents=True, exist_ok=True)
 
-    # 只处理分割后的 train/valid/test 文件
     txt_files = [p for p in raw_dir.glob("*.txt") if any(
         suf in p.stem for suf in ("train", "valid", "test")
     )]
 
+    if only:
+        txt_files = [p for p in txt_files if only in p.stem]
+
     if not txt_files:
-        print(f"[Error] No split .txt files (train/valid/test) found in {raw_dir}", file=sys.stderr)
+        print(f"[Error] No matching .txt files found in {raw_dir}", file=sys.stderr)
         sys.exit(1)
 
     nlp = None
@@ -56,8 +58,13 @@ def filter_sentences(min_len=5, max_len=25, split_mode="spacy"):
 
     for input_path in txt_files:
         output_path = filtered_dir / input_path.name
-        filtered = []
 
+        # 跳过已存在文件（除非 overwrite）
+        if output_path.exists() and not overwrite:
+            print(f"[Skip] {output_path} already exists, skipping...")
+            continue
+
+        filtered = []
         raw_sents, raw_tokens = 0, 0
         filt_sents, filt_tokens = 0, 0
 
@@ -142,6 +149,11 @@ if __name__ == "__main__":
     parser.add_argument("--max_len", type=int, default=30, help="Maximum number of words")
     parser.add_argument("--split-mode", type=str, choices=["spacy", "regex"], default="spacy",
                         help="Sentence splitting mode: spacy (default) or regex")
+    parser.add_argument("--only", type=str, choices=["train", "valid", "test"],
+                        help="Only process this split")
+    parser.add_argument("--overwrite", action="store_true",
+                        help="Force re-process even if output file exists")
     args = parser.parse_args()
 
-    filter_sentences(min_len=args.min_len, max_len=args.max_len, split_mode=args.split_mode)
+    filter_sentences(min_len=args.min_len, max_len=args.max_len,
+                     split_mode=args.split_mode, only=args.only, overwrite=args.overwrite)

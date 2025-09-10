@@ -1,0 +1,4 @@
+step,accuracy,correct,total,checkpoint
+1900,0.806,806,1000,/home/hd49/relational-casemarking-learning/checkpoints/none_A+P_with_invalid/checkpoint-1900
+1950,0.806,806,1000,/home/hd49/relational-casemarking-learning/checkpoints/none_A+P_with_invalid/checkpoint-1950
+2000,0.806,806,1000,/home/hd49/relational-casemarking-learning/checkpoints/none_A+P_with_invalid/checkpoint-2000
