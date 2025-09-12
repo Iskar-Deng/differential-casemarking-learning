@@ -175,11 +175,12 @@ python -m evaluation.eval_single_ckpt \
   --save-details results/1.jsonl
 
 python -m evaluation.eval_single_ckpt \
-  --checkpoint /home/hd49/relational-casemarking-learning/checkpoints/rule_A+P_with_invalid/checkpoint-2000 \
-  --jsonl /home/hd49/relational-casemarking-learning/evaluation/casemarking/rule_A+P/cbt_minimal_pairs.jsonl \
+  --checkpoint /home/hd49/relational-casemarking-learning/checkpoints/local_Anone-forward_Panimal-forward/checkpoint-4000 \
+  --jsonl /home/hd49/relational-casemarking-learning/evaluation/BLiMP_raw/regular_plural_subject_verb_agreement_1.jsonl \
   --batch-size 16 \
   --fp16 \
-  --save-details results/rule_A+P_with_invalid_2000.jsonl
+  --save-details results/1.jsonl
+
 ```
 
 #### Draw the plot
