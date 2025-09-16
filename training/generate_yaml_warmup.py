@@ -5,12 +5,7 @@ Generate a YAML config from a perturbation output directory.
 
 新增功能:
   --oversample N  将 train_affected.txt 重复采样 N 倍 (默认 1)
-  用于增加标记样本在训练集中的占比，提高学习信号强度。
-
-Example:
-  python -m training.generate_yaml \
-    --input_dir data/perturbed_local/local_Anone-forward_Pp3-forward \
-    --oversample 3
+  --warmup        只使用 affected/unaffected (不加载 invalid)，用于 warmup 阶段
 """
 
 import argparse
@@ -66,6 +61,8 @@ def main():
     ap.add_argument("--eval-split", type=str, choices=["valid", "test"], default="valid")
     ap.add_argument("--oversample", type=int, default=1,
                     help="重复采样 train_affected.txt N 次 (默认 1 表示不重复)")
+    ap.add_argument("--warmup", action="store_true",
+                    help="仅使用 affected/unaffected 训练集，不加载 invalid")
     ap.add_argument("--overwrite", action="store_true")
     args = ap.parse_args()
 
@@ -73,7 +70,7 @@ def main():
     if not base_dir.exists():
         raise FileNotFoundError(f"Directory not found: {base_dir}")
 
-    run_id = base_dir.name
+    run_id = base_dir.name + ("_warmup" if args.warmup else "")
 
     def pick_paths(split: str):
         affected = list(base_dir.glob(f"{split}_affected.txt"))
@@ -92,7 +89,6 @@ def main():
     train_paths = pick_paths("train")
     eval_paths = pick_paths(args.eval_split)
 
-    # 关键：oversample 处理
     train_files = []
     if args.oversample > 1:
         train_files.extend([train_paths["affected"]] * args.oversample)
@@ -100,12 +96,11 @@ def main():
     else:
         train_files.append(train_paths["affected"])
         train_files.append(train_paths["unaffected"])
-    if "invalid" in train_paths:
+    if (not args.warmup) and "invalid" in train_paths:
         train_files.append(train_paths["invalid"])
 
-
     eval_files = [eval_paths["affected"], eval_paths["unaffected"]]
-    if "invalid" in eval_paths:
+    if (not args.warmup) and "invalid" in eval_paths:
         eval_files.append(eval_paths["invalid"])
 
     cfg = dict(TEMPLATE)
@@ -128,6 +123,7 @@ def main():
     print(f"[OK] wrote config: {out_yaml}")
     print(f"  run_id     : {run_id}")
     print(f"  eval_split : {args.eval_split}")
+    print(f"  warmup     : {args.warmup}")
     print(f"  oversample : {args.oversample}x affected")
     print(f"  cache_dir  : {cfg['artifacts']['cache_dir']}")
     print(f"  run_dir    : {cfg['artifacts']['run_dir']}")

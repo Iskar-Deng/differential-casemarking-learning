@@ -16,7 +16,7 @@ artifacts:
   cache_dir: /home/hd49/relational-casemarking-learning/cache/local_Anone-forward_Panimal-forward
   run_dir: /home/hd49/relational-casemarking-learning/checkpoints/local_Anone-forward_Panimal-forward
 training_arguments:
-  max_steps: 4000
+  max_steps: 8000
   per_device_train_batch_size: 4
   optim: adamw_torch_fused
   bf16: true
@@ -42,6 +42,14 @@ training_arguments:
 data:
   train_files:
   - /mnt/data/projects/data_relational_casemarking/perturbed_local/local_Anone-forward_Panimal-forward/train_affected.txt
+  - /mnt/data/projects/data_relational_casemarking/perturbed_local/local_Anone-forward_Panimal-forward/train_affected.txt
+  - /mnt/data/projects/data_relational_casemarking/perturbed_local/local_Anone-forward_Panimal-forward/train_affected.txt
+  - /mnt/data/projects/data_relational_casemarking/perturbed_local/local_Anone-forward_Panimal-forward/train_affected.txt
+  - /mnt/data/projects/data_relational_casemarking/perturbed_local/local_Anone-forward_Panimal-forward/train_affected.txt
+  - /mnt/data/projects/data_relational_casemarking/perturbed_local/local_Anone-forward_Panimal-forward/train_unaffected.txt
+  - /mnt/data/projects/data_relational_casemarking/perturbed_local/local_Anone-forward_Panimal-forward/train_unaffected.txt
+  - /mnt/data/projects/data_relational_casemarking/perturbed_local/local_Anone-forward_Panimal-forward/train_unaffected.txt
+  - /mnt/data/projects/data_relational_casemarking/perturbed_local/local_Anone-forward_Panimal-forward/train_unaffected.txt
   - /mnt/data/projects/data_relational_casemarking/perturbed_local/local_Anone-forward_Panimal-forward/train_unaffected.txt
   - /mnt/data/projects/data_relational_casemarking/perturbed_local/local_Anone-forward_Panimal-forward/train_invalid.txt
   eval_files:

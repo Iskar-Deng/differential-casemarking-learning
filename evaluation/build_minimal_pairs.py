@@ -1,13 +1,15 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Build minimal pairs from structured test set (L1–L3 local rules).
+Build minimal pairs from structured test set (L1–L3 local rules, P-only when A_mode=none).
 
 - 输入：$DATA_PATH/structured/test_verbs.jsonl
 - 输出：$EVALUATION_PATH/casemarking/local_Amode-mark_Pmode-mark/test_minimal_pairs.jsonl
-- good/bad 双向配对：一半有标记作 good，一半无标记作 good
-- bad 强制反向标记（即顺向改成逆向）
-- 随机采样直到满足 num_pairs
+- 规则：
+  * 仅在所启用的角色上构造最小对；若 A_mode=none，则严格只考虑 P（Patient）。
+  * 一半 pair：good=按规则应当标记 → 在同一 P 处加标；bad=同一处不标。
+  * 另一半 pair：good=按规则不应标记 → 不标；bad=同一 P 处强制加标（“给不该加的P加上标记”）。
+  * 保证 minimal：两句仅在一个 NP 是否带标记上有差异，其他文本一致。
 """
 
 import os
@@ -16,6 +18,7 @@ import random
 import argparse
 from pathlib import Path
 from tqdm import tqdm
+
 import torch
 from transformers import BertTokenizer, BertForSequenceClassification
 
@@ -50,6 +53,8 @@ def cutoff_hierarchy(cut):
 # ---------------- Classifiers ----------------
 class _BertCls:
     def __init__(self, model_dir, id2lab, max_length=128):
+        if not os.path.isdir(model_dir):
+            raise FileNotFoundError(f"Model dir not found: {model_dir}")
         self.tok = BertTokenizer.from_pretrained(model_dir, use_fast=True)
         self.model = BertForSequenceClassification.from_pretrained(model_dir).to(device)
         self.model.eval()
@@ -77,6 +82,7 @@ NPDEF = _BertCls(
     id2lab={0: "p12", 1: "p3", 2: "proper", 3: "common"}
 )
 
+# ---------------- Helpers ----------------
 def parse_combo(arg):
     return arg.split("-") if arg != "none" else []
 
@@ -102,6 +108,8 @@ def decide_mark_combo(role, label_dict, cutoffs, marks):
     return True
 
 def apply_spans_to_tokens(tokens, spans):
+    if not spans:
+        return " ".join(t["text"] for t in tokens)
     spans = sorted(spans, key=lambda s: s["span"][0])
     out, i = [], 0
     for sp in spans:
@@ -114,57 +122,34 @@ def apply_spans_to_tokens(tokens, spans):
         out.append(tokens[i]["text"]); i += 1
     return " ".join(out)
 
-def mark_sentence(data, A_modes, A_marks, P_modes, P_marks, invert=False):
-    tokens = data.get("tokens") or []
-    verbs = data.get("verbs") or []
-    sent_text = " ".join(t["text"] for t in tokens)
-    spans, has_marked = [], False
+def should_mark_role(role, subj_labels, obj_labels, A_modes, A_marks, P_modes, P_marks):
+    if role == "A":
+        if not A_modes:  # 未启用 A，绝不标 A
+            return None  # 用 None 表示“不考虑该角色”
+        return decide_mark_combo("A", subj_labels, A_modes, A_marks)
+    else:
+        if not P_modes:
+            return None
+        return decide_mark_combo("P", obj_labels, P_modes, P_marks)
 
-    for entry in verbs:
-        subj = entry.get("subject")
-        objects = entry.get("objects") or []
-        if not subj or len(objects) != 1:
-            continue
-        obj = objects[0]
-        if obj.get("dep") == "ccomp":
-            continue
+def build_pair_on_role(tokens, subj, obj, role, good_is_marked):
+    base_tokens = [dict(t) for t in tokens]
+    span = dict(subj if role == "A" else obj)
+    span["text"] = f"{span['text']} " + (AGENT_MARK if role == "A" else PATIENT_MARK)
+    marked_sent = apply_spans_to_tokens(base_tokens, [span])
+    unmarked_sent = " ".join(t["text"] for t in base_tokens)
+    if good_is_marked:
+        return marked_sent, unmarked_sent
+    else:
+        return unmarked_sent, marked_sent
 
-        label_dict = {}
-        if any(cutoff_hierarchy(c) == "animacy" for c in A_modes+P_modes if c!="none"):
-            label_dict["animacy"] = ANIMACY.predict(sent_text, subj["text"])
-            label_dict["animacy_P"] = ANIMACY.predict(sent_text, obj["text"])
-        if any(cutoff_hierarchy(c) == "npdef" for c in A_modes+P_modes if c!="none"):
-            label_dict["npdef"] = NPDEF.predict(sent_text, subj["text"])
-            label_dict["npdef_P"] = NPDEF.predict(sent_text, obj["text"])
+def count_marks(s):
+    return s.count(AGENT_MARK) + s.count(PATIENT_MARK)
 
-        # Agent
-        if A_modes:
-            subj_labels = {"animacy": label_dict.get("animacy"),
-                           "npdef": label_dict.get("npdef")}
-            A_marks_eff = [
-                "inverse" if invert and m == "forward" else
-                "forward" if invert and m == "inverse" else m
-                for m in A_marks
-            ]
-            if decide_mark_combo("A", subj_labels, A_modes, A_marks_eff):
-                s = dict(subj); s["text"] = f"{s['text']} {AGENT_MARK}"
-                spans.append(s); has_marked = True
+def stripped(s):
+    return s.replace(AGENT_MARK, "").replace(PATIENT_MARK, "").replace("  ", " ").strip()
 
-        # Patient
-        if P_modes:
-            obj_labels = {"animacy": label_dict.get("animacy_P"),
-                          "npdef": label_dict.get("npdef_P")}
-            P_marks_eff = [
-                "inverse" if invert and m == "forward" else
-                "forward" if invert and m == "inverse" else m
-                for m in P_marks
-            ]
-            if decide_mark_combo("P", obj_labels, P_modes, P_marks_eff):
-                o = dict(obj); o["text"] = f"{o['text']} {PATIENT_MARK}"
-                spans.append(o); has_marked = True
-
-    return apply_spans_to_tokens(tokens, spans) if has_marked else sent_text
-
+# ---------------- Main ----------------
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--A_mode", type=str, default="none")
@@ -172,12 +157,24 @@ def main():
     ap.add_argument("--P_mode", type=str, default="none")
     ap.add_argument("--P_markedness", type=str, default="forward")
     ap.add_argument("--num_pairs", type=int, required=True)
+    ap.add_argument("--seed", type=int, default=2025)
     args = ap.parse_args()
+
+    random.seed(args.seed)
 
     A_modes = parse_combo(args.A_mode)
     P_modes = parse_combo(args.P_mode)
     A_marks = args.A_markedness.split("-") if args.A_markedness != "none" else []
     P_marks = args.P_markedness.split("-") if args.P_markedness != "none" else []
+
+    # 若 A_mode=none，则不考虑 A；仅在 P 上构造最小对
+    roles_to_consider = []
+    if A_modes:
+        roles_to_consider.append("A")
+    if P_modes:
+        roles_to_consider.append("P")
+    if not roles_to_consider:
+        raise ValueError("At least one of A_mode or P_mode must be enabled to build pairs.")
 
     input_path = os.path.join(DATA_PATH, "structured", "test_verbs.jsonl")
     if not os.path.exists(input_path):
@@ -191,34 +188,83 @@ def main():
     out_dir.mkdir(parents=True, exist_ok=True)
     out_file = out_dir / "test_minimal_pairs.jsonl"
 
-    good_count, bad_count = 0, 0
+    half = args.num_pairs // 2
+    good_marked_target = 0
+    good_unmarked_target = 0
     results = []
 
     for line in tqdm(lines, desc="Building minimal pairs", total=len(lines)):
-        if good_count >= args.num_pairs // 2 and bad_count >= args.num_pairs // 2:
+        if len(results) >= args.num_pairs:
             break
         data = json.loads(line)
-        if not data.get("tokens") or not data.get("verbs"):
+        tokens = data.get("tokens") or []
+        verbs = data.get("verbs") or []
+        if not tokens or not verbs:
             continue
 
-        marked = mark_sentence(data, A_modes, A_marks, P_modes, P_marks, invert=False)
-        unmarked = mark_sentence(data, A_modes, A_marks, P_modes, P_marks, invert=True)
-        if marked == unmarked:
-            continue  # 无法形成最小对
+        sent_text = " ".join(t["text"] for t in tokens)
 
-        if good_count < args.num_pairs // 2:
-            results.append({"sentence_good": marked, "sentence_bad": unmarked})
-            good_count += 1
-        elif bad_count < args.num_pairs // 2:
-            results.append({"sentence_good": unmarked, "sentence_bad": marked})
-            bad_count += 1
+        # 是否需要调用分类器：只在启用对应层级的情况下预测
+        need_anim = any(cutoff_hierarchy(c) == "animacy" for c in A_modes + P_modes if c != "none")
+        need_npdef = any(cutoff_hierarchy(c) == "npdef" for c in A_modes + P_modes if c != "none")
+
+        for entry in verbs:
+            subj = entry.get("subject")
+            objs = entry.get("objects") or []
+            if not subj or len(objs) != 1:
+                continue
+            obj = objs[0]
+            if obj.get("dep") == "ccomp":
+                continue
+
+            subj_labels = {
+                "animacy": ANIMACY.predict(sent_text, subj["text"]) if need_anim else None,
+                "npdef":   NPDEF.predict(sent_text, subj["text"])   if need_npdef else None,
+            }
+            obj_labels = {
+                "animacy": ANIMACY.predict(sent_text, obj["text"]) if need_anim else None,
+                "npdef":   NPDEF.predict(sent_text, obj["text"])   if need_npdef else None,
+            }
+
+            # 只遍历允许的角色（例如 A_mode=none 时，这里只会有 'P'）
+            for role in roles_to_consider:
+                sm = should_mark_role(role, subj_labels, obj_labels, A_modes, A_marks, P_modes, P_marks)
+                if sm is None:
+                    continue  # 该角色未启用，跳过（保险）
+
+                # 前一半 pair：选择“应标记”的样本 → good 带标
+                # 后一半 pair：选择“应不标记”的样本 → good 不带标，bad 强制加标
+                pick_mark = (good_marked_target < half)
+                if pick_mark and not sm:
+                    continue
+                if (not pick_mark) and sm:
+                    continue
+
+                good, bad = build_pair_on_role(tokens, subj, obj, role, good_is_marked=pick_mark)
+
+                # minimal & 一致性检查
+                if abs(count_marks(good) - count_marks(bad)) != 1:
+                    continue
+                if stripped(good) != stripped(bad):
+                    continue
+
+                results.append({"sentence_good": good, "sentence_bad": bad})
+                if pick_mark:
+                    good_marked_target += 1
+                else:
+                    good_unmarked_target += 1
+                break  # 选中一个 entry+role 即可，保证只改一个位置
+            if len(results) >= args.num_pairs:
+                break
+
+    # 若 num_pairs 为奇数，可能少 1；此处按目前逻辑保持不变
 
     with open(out_file, "w", encoding="utf-8") as f:
         for item in results:
             f.write(json.dumps(item, ensure_ascii=False) + "\n")
 
     print(f"\n[DONE] 生成 minimal pairs: {len(results)} 条")
-    print(f"[INFO] good(有标记)={good_count} bad(无标记)={bad_count}")
+    print(f"[INFO] good(有标记)={good_marked_target} good(无标记)={good_unmarked_target}")
     print(f"[INFO] 输出文件: {out_file}")
 
 if __name__ == "__main__":
