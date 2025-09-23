@@ -168,14 +168,14 @@ python -m evaluation.eval_minipairs \
 #### Single Eval
 ```bash
 python -m evaluation.eval_single_ckpt \
-  --checkpoint checkpoints/local_Anone-forward_Pp3-forward/checkpoint-1000 \
-  --jsonl /home/hd49/relational-casemarking-learning/evaluation/casemarking/local_Anone-forward_Pp3-forward/test_minimal_pairs.jsonl \
+  --checkpoint checkpoints/local_Ap3-forward_Pnone-forward/checkpoint-5500 \
+  --jsonl /home/hd49/relational-casemarking-learning/evaluation/casemarking/local_Ap3-forward_Pnone-forward/test_minimal_pairs.jsonl \
   --batch-size 16 \
   --fp16 \
   --save-details results/1.jsonl
 
 python -m evaluation.eval_single_ckpt \
-  --checkpoint /home/hd49/relational-casemarking-learning/checkpoints/local_Anone-forward_Pp3-forward/checkpoint-8000 \
+  --checkpoint checkpoints/local_Anone-forward_Pp3-forward/checkpoint-3000 \
   --jsonl /home/hd49/relational-casemarking-learning/evaluation/BLiMP_raw/regular_plural_subject_verb_agreement_1.jsonl \
   --batch-size 16 \
   --fp16 \

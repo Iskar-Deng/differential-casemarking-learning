@@ -10,6 +10,9 @@ python -m data_processing.split_corpus
 
 # 自定义比例
 python -m data_processing.split_corpus --train-ratio 0.7 --valid-ratio 0.2 --test-ratio 0.1
+
+# 指定文件
+python -m data_processing.split_corpus --file /home/hd49/relational-casemarking-learning/data/other/OpenSubtitles/OpenSubtitles.txt
 """
 
 import argparse
@@ -21,6 +24,7 @@ from utils import DATA_PATH
 
 def parse_args():
     ap = argparse.ArgumentParser()
+    ap.add_argument("--file", type=str, default=None, help="指定要拆分的文件路径")
     ap.add_argument("--train-ratio", type=float, default=0.9, help="Proportion of lines for training set")
     ap.add_argument("--valid-ratio", type=float, default=0.05, help="Proportion of lines for validation set")
     ap.add_argument("--test-ratio", type=float, default=0.05, help="Proportion of lines for test set")
@@ -32,11 +36,17 @@ def main():
     args = parse_args()
     raw_dir = Path(DATA_PATH) / "raw"
 
-    # 找出唯一 txt
-    txt_files = list(raw_dir.glob("*.txt"))
-    if len(txt_files) != 1:
-        raise RuntimeError(f"[Error] Expected exactly 1 .txt file in {raw_dir}, found {len(txt_files)}")
-    corpus_file = txt_files[0]
+    # 选择语料文件
+    if args.file:
+        corpus_file = Path(args.file)
+        if not corpus_file.exists():
+            raise FileNotFoundError(f"[Error] 指定的文件不存在: {corpus_file}")
+    else:
+        txt_files = list(raw_dir.glob("*.txt"))
+        if len(txt_files) != 1:
+            raise RuntimeError(f"[Error] Expected exactly 1 .txt file in {raw_dir}, found {len(txt_files)}")
+        corpus_file = txt_files[0]
+
     print(f"[Info] Using corpus: {corpus_file}")
 
     base = corpus_file.stem  # e.g. wiki_all
