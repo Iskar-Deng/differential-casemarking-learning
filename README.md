@@ -1,4 +1,9 @@
-# Learning What Models Can't: Animacy-Based Case Marking in Natural Language
+# Semantic Triggers and Grammatical Learnability: Probing Differential Argument Marking in LMs
+
+> **Note:** This repository is an *in-progress* research implementation.  
+> Some components (e.g., classifier training and perturbation injection) are experimental and under active development.  
+> The current working branch is **`no-mistral`**, which contains a complete pipeline from corpus filtering to model training,  
+> though stability and full reproducibility are *not yet guaranteed*.
 
 ![Skynet Skyboy](./skynet-skyboy.gif)
 
