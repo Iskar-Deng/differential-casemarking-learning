@@ -1,20 +1,29 @@
-# perturbation/extract_verb.py
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+Extract verb-argument structures from parsed JSONL files.
+
+Input:  $DATA_PATH/parsed/*_parsed.jsonl
+Output: $DATA_PATH/structured/*_verbs.jsonl
+"""
+
 import os
-import json
 import sys
-from collections import defaultdict, Counter
+import json
+from collections import defaultdict
 from tqdm import tqdm
 from utils import DATA_PATH
 
+
 def build_children_index(tokens):
-    """tokens: list[dict] from parser; return {head_id: [child_token_dict,...]}"""
+    """Return {head_id: [child_token_dict, ...]}."""
     children = defaultdict(list)
     for t in tokens:
-        # Protect unknown head ids
         head_id = t.get("head", -1)
         if isinstance(head_id, int):
             children[head_id].append(t)
     return children
+
 
 def extract_np_span(token_id, id_to_token, children):
     head = id_to_token[token_id]
@@ -27,8 +36,9 @@ def extract_np_span(token_id, id_to_token, children):
     return {
         "text": " ".join(t["text"] for t in span_tokens),
         "span": [min(ids), max(ids)],
-        "head": head["text"]
+        "head": head["text"],
     }
+
 
 def extract_clause_span(token_id, id_to_token, children):
     visited = set()
@@ -42,28 +52,28 @@ def extract_clause_span(token_id, id_to_token, children):
             cid = child.get("id")
             if isinstance(cid, int) and cid not in visited:
                 to_visit.append(cid)
-    span_tokens = sorted([id_to_token[i] for i in visited if i in id_to_token], key=lambda x: x["id"])
+    span_tokens = sorted(
+        [id_to_token[i] for i in visited if i in id_to_token],
+        key=lambda x: x["id"],
+    )
     if not span_tokens:
         return {"text": "", "span": [token_id, token_id], "head": id_to_token[token_id]["text"]}
     ids = [t["id"] for t in span_tokens]
     return {
         "text": " ".join(t["text"] for t in span_tokens),
         "span": [min(ids), max(ids)],
-        "head": id_to_token[token_id]["text"]
+        "head": id_to_token[token_id]["text"],
     }
 
+
 def extract_verb_arguments(tokens):
-    """
-    tokens: list of dicts with keys:
-      id, text, lemma, pos, dep, head, ner
-    """
+    """Extract verbs with subjects and objects from parsed token dicts."""
     if not tokens:
         return []
 
     id_to_token = {t["id"]: t for t in tokens if isinstance(t.get("id"), int)}
     children = build_children_index(tokens)
-
-    verbs = [t for t in tokens if t.get("pos") in {"VERB"}]
+    verbs = [t for t in tokens if t.get("pos") == "VERB"]
 
     results = []
     for verb in verbs:
@@ -72,7 +82,7 @@ def extract_verb_arguments(tokens):
             "verb": verb.get("lemma", verb.get("text", "")),
             "verb_id": vid,
             "subject": None,
-            "objects": []
+            "objects": [],
         }
 
         for t in children.get(vid, []):
@@ -85,13 +95,13 @@ def extract_verb_arguments(tokens):
                 try:
                     result["subject"] = extract_np_span(tid, id_to_token, children)
                 except Exception:
-                    result["subject"] = {"text":"", "span":[tid, tid], "head": id_to_token[tid]["text"]}
+                    result["subject"] = {"text": "", "span": [tid, tid], "head": id_to_token[tid]["text"]}
 
             elif dep in {"dobj", "obj", "attr", "dative"}:
                 try:
                     span = extract_np_span(tid, id_to_token, children)
                 except Exception:
-                    span = {"text":"", "span":[tid, tid], "head": id_to_token[tid]["text"]}
+                    span = {"text": "", "span": [tid, tid], "head": id_to_token[tid]["text"]}
                 span["dep"] = dep
                 result["objects"].append(span)
 
@@ -111,26 +121,26 @@ def extract_verb_arguments(tokens):
                                 subtree_tokens.append(gc)
                 if len(subtree_tokens) > 1:
                     ids = [tok["id"] for tok in subtree_tokens if isinstance(tok.get("id"), int)]
-                    span_sorted = sorted([tok for tok in subtree_tokens if isinstance(tok.get("id"), int)],
-                                         key=lambda x: x["id"])
+                    span_sorted = sorted(
+                        [tok for tok in subtree_tokens if isinstance(tok.get("id"), int)],
+                        key=lambda x: x["id"],
+                    )
                     pobj_head = next((tok["text"] for tok in subtree_tokens if tok.get("dep") == "pobj"), None)
                     result["objects"].append({
                         "text": " ".join(tok["text"] for tok in span_sorted),
                         "span": [min(ids), max(ids)] if ids else [vid, vid],
                         "head": pobj_head,
-                        "dep": "prep+pobj"
+                        "dep": "prep+pobj",
                     })
 
         results.append(result)
 
     return results
 
+
 def process_file(input_path, output_path):
     os.makedirs(os.path.dirname(output_path), exist_ok=True)
-    n_lines = 0
-    n_empty = 0
-    n_errors = 0
-    n_verbs = 0
+    n_lines = n_empty = n_errors = n_verbs = 0
 
     with open(input_path, encoding="utf-8") as fin, open(output_path, "w", encoding="utf-8") as fout:
         for line in tqdm(fin, desc=f"Extracting {os.path.basename(input_path)}"):
@@ -152,7 +162,7 @@ def process_file(input_path, output_path):
 
             try:
                 verbs = extract_verb_arguments(tokens)
-            except Exception as e:
+            except Exception:
                 n_errors += 1
                 verbs = []
 
@@ -167,12 +177,12 @@ def process_file(input_path, output_path):
         "out": output_path,
     }
 
+
 def process_all():
     parsed_dir = os.path.join(DATA_PATH, "parsed")
     structured_dir = os.path.join(DATA_PATH, "structured")
     os.makedirs(structured_dir, exist_ok=True)
 
-    # 处理所有 *_parsed.jsonl（train/test/valid）
     jsonl_files = sorted([f for f in os.listdir(parsed_dir) if f.endswith("_parsed.jsonl")])
     if not jsonl_files:
         print(f"[ERROR] No *_parsed.jsonl in {parsed_dir}", file=sys.stderr)
@@ -190,7 +200,9 @@ def process_all():
 
     print("\n[SUMMARY]")
     for k, s in report.items():
-        print(f" - {k}: lines={s['lines']}, empty={s['empty']}, errors={s['errors']}, verbs={s['verbs_total']}, out={s['out']}")
+        print(f" - {k}: lines={s['lines']}, empty={s['empty']}, errors={s['errors']}, "
+              f"verbs={s['verbs_total']}, out={s['out']}")
+
 
 if __name__ == "__main__":
     process_all()

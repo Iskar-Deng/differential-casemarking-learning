@@ -172,15 +172,17 @@ def process_one_jsonl(input_path, out_dir, strategy,
     stats = {"affected": 0, "unaffected": 0, "invalid": 0}
     processed_valid = 0
 
+    # 先数总行数，给 tqdm 用
     with open(input_path, "r", encoding="utf-8") as fin:
-        lines = fin.readlines()
-        total_lines = len(lines)
-        lines = lines[processed_lines:]
+        total_lines = sum(1 for _ in fin)
 
+    with open(input_path, "r", encoding="utf-8") as fin:
         pbar = tqdm(total=total_lines, desc=f"{fname}", initial=processed_lines)
         last_update = time.time()
 
-        for idx, line in enumerate(lines, processed_lines + 1):
+        for idx, line in enumerate(fin, 1):
+            if idx <= processed_lines:
+                continue
             if debug and processed_valid >= debug_limit:
                 break
             if not line.strip():

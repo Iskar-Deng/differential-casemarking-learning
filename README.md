@@ -79,7 +79,7 @@ Make sure only one `.txt` file exists under `raw/`.
 ### 2. Filter noisy or irrelevant sentences
 ```bash
 python -m data_processing.split_corpus
-python3 -m data_processing.filter_sentences
+python -m data_processing.filter_sentences
 ```
 
 ---
@@ -87,7 +87,7 @@ python3 -m data_processing.filter_sentences
 ### 3. Parse using spaCy + benepar
 
 ```bash
-python3 -m perturbation.parse
+python -m perturbation.parse
 ```
 
 ---
@@ -168,8 +168,8 @@ python -m evaluation.eval_minipairs \
 #### Single Eval
 ```bash
 python -m evaluation.eval_single_ckpt \
-  --checkpoint checkpoints/local_Ap3-forward_Pnone-forward/checkpoint-5500 \
-  --jsonl /home/hd49/relational-casemarking-learning/evaluation/casemarking/local_Ap3-forward_Pnone-forward/test_minimal_pairs.jsonl \
+  --checkpoint /home/hd49/relational-casemarking-learning/checkpoints/local_Anone-forward_Pp3-forward/checkpoint-50000 \
+  --jsonl /home/hd49/relational-casemarking-learning/evaluation/BLiMP_raw/regular_plural_subject_verb_agreement_1.jsonl \
   --batch-size 16 \
   --fp16 \
   --save-details results/1.jsonl

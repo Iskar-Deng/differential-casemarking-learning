@@ -1,12 +1,10 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Filter corpus sentences by length with optional sentence splitter.
-- 输入: $DATA_PATH/raw 下的 *_train.txt, *_valid.txt, *_test.txt
-- 输出: $DATA_PATH/filtered 下同名文件 + 统计 JSON
-- 分句方式:
-    --split-mode spacy   (默认, 使用 spaCy sentencizer)
-    --split-mode regex   (使用正则分句, 快, 但精度低)
+Filter corpus sentences by length.
+
+Input:  $DATA_PATH/raw  containing *_train.txt, *_valid.txt, *_test.txt  
+Output: $DATA_PATH/filtered with filtered files and a summary JSON.
 """
 
 import argparse
@@ -14,13 +12,14 @@ import sys
 import json
 import re
 from pathlib import Path
-from utils import DATA_PATH
+
 import spacy
 from tqdm import tqdm
+from utils import DATA_PATH
 
 
 def regex_sentencize(text: str):
-    """简单正则分句，按 ., !, ? 后空格切分"""
+    """Split text into sentences using regex."""
     return [s.strip() for s in re.split(r'(?<=[.!?])\s+', text) if s.strip()]
 
 
@@ -29,10 +28,7 @@ def filter_sentences(min_len=5, max_len=25, split_mode="spacy", only=None, overw
     filtered_dir = Path(DATA_PATH) / "filtered"
     filtered_dir.mkdir(parents=True, exist_ok=True)
 
-    txt_files = [p for p in raw_dir.glob("*.txt") if any(
-        suf in p.stem for suf in ("train", "valid", "test")
-    )]
-
+    txt_files = [p for p in raw_dir.glob("*.txt") if any(suf in p.stem for suf in ("train", "valid", "test"))]
     if only:
         txt_files = [p for p in txt_files if only in p.stem]
 
@@ -48,7 +44,6 @@ def filter_sentences(min_len=5, max_len=25, split_mode="spacy", only=None, overw
             print("[Error] spaCy model 'en_core_web_sm' not found. Run: python -m spacy download en_core_web_sm",
                   file=sys.stderr)
             sys.exit(1)
-
         if "senter" not in nlp.pipe_names and "sentencizer" not in nlp.pipe_names:
             nlp.add_pipe("sentencizer")
 
@@ -58,17 +53,13 @@ def filter_sentences(min_len=5, max_len=25, split_mode="spacy", only=None, overw
 
     for input_path in txt_files:
         output_path = filtered_dir / input_path.name
-
-        # 跳过已存在文件（除非 overwrite）
         if output_path.exists() and not overwrite:
             print(f"[Skip] {output_path} already exists, skipping...")
             continue
 
         filtered = []
-        raw_sents, raw_tokens = 0, 0
-        filt_sents, filt_tokens = 0, 0
+        raw_sents = raw_tokens = filt_sents = filt_tokens = 0
 
-        # 先数总行数
         with open(input_path, "r", encoding="utf-8") as f:
             n_lines = sum(1 for _ in f)
 
@@ -79,11 +70,10 @@ def filter_sentences(min_len=5, max_len=25, split_mode="spacy", only=None, overw
                 if not line:
                     continue
 
-                # 分句
                 if split_mode == "spacy":
                     doc = nlp(line)
                     sentences = [s.text.strip() for s in doc.sents if s.text.strip()]
-                else:  # regex
+                else:
                     sentences = regex_sentencize(line)
 
                 for sent in sentences:
@@ -92,13 +82,11 @@ def filter_sentences(min_len=5, max_len=25, split_mode="spacy", only=None, overw
                         continue
                     raw_sents += 1
                     raw_tokens += len(tokens)
-
                     if min_len <= len(tokens) <= max_len:
                         filt_sents += 1
                         filt_tokens += len(tokens)
                         filtered.append(sent)
 
-        # 写文件时也有进度条
         with open(output_path, "w", encoding="utf-8") as f_out:
             for sent in tqdm(filtered, total=len(filtered), desc=f"Writing {output_path.name}", unit="sents"):
                 f_out.write(sent + "\n")
@@ -106,8 +94,7 @@ def filter_sentences(min_len=5, max_len=25, split_mode="spacy", only=None, overw
         print(f"[OK] {filt_sents} sentences written to {output_path}")
         print(f"[Stats] {input_path.name}: "
               f"raw_sents={raw_sents}, raw_tokens={raw_tokens} | "
-              f"kept_sents={filt_sents}, kept_tokens={filt_tokens} | "
-              f"dropped_sents={raw_sents - filt_sents}, dropped_tokens={raw_tokens - filt_tokens}")
+              f"kept_sents={filt_sents}, kept_tokens={filt_tokens}")
 
         total_raw_sents += raw_sents
         total_raw_tokens += raw_tokens
@@ -137,23 +124,27 @@ def filter_sentences(min_len=5, max_len=25, split_mode="spacy", only=None, overw
     with open(stats_path, "w", encoding="utf-8") as f_json:
         json.dump(stats, f_json, ensure_ascii=False, indent=2)
 
-    print("\n[Summary] All files")
+    print("\n[Summary]")
     for k, v in stats["summary"].items():
         print(f"  {k:15}: {v}")
-    print(f"[OK] Wrote stats JSON: {stats_path}")
+    print(f"[OK] Stats written to {stats_path}")
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Filter corpus sentences of appropriate length")
+    parser = argparse.ArgumentParser(description="Filter corpus sentences by length")
     parser.add_argument("--min_len", type=int, default=3, help="Minimum number of words")
     parser.add_argument("--max_len", type=int, default=30, help="Maximum number of words")
     parser.add_argument("--split-mode", type=str, choices=["spacy", "regex"], default="spacy",
-                        help="Sentence splitting mode: spacy (default) or regex")
+                        help="Sentence splitting mode")
     parser.add_argument("--only", type=str, choices=["train", "valid", "test"],
-                        help="Only process this split")
-    parser.add_argument("--overwrite", action="store_true",
-                        help="Force re-process even if output file exists")
+                        help="Process only one split")
+    parser.add_argument("--overwrite", action="store_true", help="Re-process even if output exists")
     args = parser.parse_args()
 
-    filter_sentences(min_len=args.min_len, max_len=args.max_len,
-                     split_mode=args.split_mode, only=args.only, overwrite=args.overwrite)
+    filter_sentences(
+        min_len=args.min_len,
+        max_len=args.max_len,
+        split_mode=args.split_mode,
+        only=args.only,
+        overwrite=args.overwrite,
+    )
