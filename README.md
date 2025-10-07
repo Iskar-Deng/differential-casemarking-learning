@@ -1,4 +1,9 @@
-# Learning What Models Can't: Animacy-Based Case Marking in Natural Language
+# Semantic Triggers and Grammatical Learnability: Probing Differential Argument Marking in LMs
+
+> **Note:** This repository is an *in-progress* research implementation.  
+> Some components (e.g., classifier training and perturbation injection) are experimental and under active development.  
+> The current working branch is **`no-mistral`**, which contains a complete pipeline from corpus filtering to model training,  
+> though stability and full reproducibility are *not yet guaranteed*.
 
 ![Skynet Skyboy](./skynet-skyboy.gif)
 
@@ -33,17 +38,7 @@ python -c "import benepar; benepar.download('benepar_en3')"
 
 ---
 
-### 2. Clone and Setup **Mistral**
-
-Follow the official Mistral instructions strictly: [https://nlp.stanford.edu/mistral/index.html](https://nlp.stanford.edu/mistral/index.html)
-
-```bash
-git clone https://github.com/stanford-crfm/mistral.git
-```
-
----
-
-### 3. Configure Paths
+### 2. Configure Paths
 
 Edit `utils.py` and set the following variables:  
 
@@ -87,10 +82,9 @@ Make sure only one `.txt` file exists under `raw/`.
 ---
 
 ### 2. Filter noisy or irrelevant sentences
-
 ```bash
-python3 -m data_processing.prepreprocess
-python3 -m data_processing.filter_sentences
+python -m data_processing.split_corpus
+python -m data_processing.filter_sentences
 ```
 
 ---
@@ -98,7 +92,7 @@ python3 -m data_processing.filter_sentences
 ### 3. Parse using spaCy + benepar
 
 ```bash
-python3 -m perturbation.parse
+python -m perturbation.parse
 ```
 
 ---
@@ -113,8 +107,10 @@ python3 -m perturbation.extract_verb
 
 ### 5. Train Animacy Classifer (Set your openai api into env first)
 ```bash
-python -m animacy_classifer.generate_training_data --max 10000         
-python -m animacy_classifer.train_classifer   
+python -m classifiers.generate_data --task animacy --max 5000 --strategy random
+python -m classifiers.generate_data --task npdef --max 5000 --strategy balanced           
+python -m classifiers.train_classifier --task animacy --epochs 10 --amp
+python -m classifiers.train_classifier --task npdef --epochs 10 --amp
 ```
 
 ---
@@ -122,40 +118,24 @@ python -m animacy_classifer.train_classifer
 ### 6. Inject animacy-based case markers
 
 ```bash
-python -m perturbation.perturb_with_model --mode rule --strategy A+P 
-python -m perturbation.perturb_with_model --mode heuristic --strategy A+P
-python -m perturbation.perturb_with_model --mode rule --strategy A_only
-python -m perturbation.perturb_with_model --mode rule --strategy P_only
-python -m perturbation.perturb_with_model --mode rule --strategy none
-python -m perturbation.perturb_with_model --mode rule --strategy full
+python -m perturbation.run_perturb \
+  --strategy local \
+  --A_mode none --A_markedness forward \
+  --P_mode animal-p12 --P_markedness forward-inverse
 ```
-
----
-
-### 7. Generate train and vad
-```bash
-python -m data_processing.generate_vad
-``` 
 
 ---
 
 ### 8. Prepare the config for training
 ```bash
-python -m tools.generate_configs 
+python -m tools.generate_yaml --mode rule --strategy A+P --overwrite 
 ``` 
 
 ---
 
 ### 9. Train the model
 ```bash
-python mistral/train.py --config mistral/conf/user_main/rule_A+P.yaml
-python mistral/train.py --config mistral/conf/user_main/rule_A+P_with_invalid.yaml
-python mistral/train.py --config mistral/conf/user_main/rule_full.yaml
-python mistral/train.py --config mistral/conf/user_main/rule_none.yaml
-python mistral/train.py --config mistral/conf/user_main/rule_none_with_invalid.yaml
-python mistral/train.py --config mistral/conf/user_main/rule_A_only.yaml
-python mistral/train.py --config mistral/conf/user_main/rule_P_only.yaml
-python mistral/train.py --config mistral/conf/user_main/heuristic_A+P.yaml
+python -m training.train_lm --mode rule --strategy A+P  
 ``` 
 
 ### 10. Experiment 1 - ppl
@@ -188,6 +168,24 @@ python -m evaluation.eval_minipairs \
     --run-id rule_A+P \
     --jsonl evaluation/casemarking/rule_A+P/cbt_minimal_pairs.jsonl \
     --out-dir results_raw_mp
+```
+
+#### Single Eval
+```bash
+python -m evaluation.eval_single_ckpt \
+  --checkpoint /home/hd49/relational-casemarking-learning/checkpoints/local_Anone-forward_Pp3-forward/checkpoint-50000 \
+  --jsonl /home/hd49/relational-casemarking-learning/evaluation/BLiMP_raw/regular_plural_subject_verb_agreement_1.jsonl \
+  --batch-size 16 \
+  --fp16 \
+  --save-details results/1.jsonl
+
+python -m evaluation.eval_single_ckpt \
+  --checkpoint checkpoints/local_Anone-forward_Pp3-forward/checkpoint-3000 \
+  --jsonl /home/hd49/relational-casemarking-learning/evaluation/BLiMP_raw/regular_plural_subject_verb_agreement_1.jsonl \
+  --batch-size 16 \
+  --fp16 \
+  --save-details results/Pp3.jsonl
+
 ```
 
 #### Draw the plot

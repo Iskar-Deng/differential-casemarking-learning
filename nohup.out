@@ -1,0 +1,4 @@
+usage: parse.py [-h] [--model-size {sm,trf}] [--batch-size BATCH_SIZE]
+                [--n-process N_PROCESS] [--resume]
+parse.py: error: unrecognized arguments:  
+/home/hd49/miniconda3/envs/gpt2-exp/bin/python: No module named training.traasfd
