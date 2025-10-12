@@ -307,7 +307,7 @@ def main():
         eval_tok = eval_tok.map(lambda ex: _group_texts(ex, block_size), batched=True, batch_size=1000, num_proc=1)
 
     collator = DataCollatorForLanguageModeling(tokenizer=tokenizer, mlm=False)
-    training_args = TrainingArguments(output_dir=str(run_dir), seed=seed, disable_tqdm=True, **targs)
+    training_args = TrainingArguments(output_dir=str(run_dir), seed=seed, disable_tqdm=False, **targs)
 
     trainer = Trainer(
         model=model,

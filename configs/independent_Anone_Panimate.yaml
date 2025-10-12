@@ -16,40 +16,37 @@ artifacts:
   run_dir: /home/hd49/relational-casemarking-learning/checkpoints/independent_Anone_Panimate
 training_arguments:
   max_steps: 150000
-  per_device_train_batch_size: 4
-  gradient_accumulation_steps: 16
+  per_device_train_batch_size: 16
+  gradient_accumulation_steps: 4
   per_device_eval_batch_size: 2
   optim: adamw_torch
-  bf16: true
-  fp16: false
-  gradient_checkpointing: true
+  bf16: false
+  fp16: true
+  gradient_checkpointing: false
   learning_rate: 2.0e-05
   weight_decay: 0.01
   warmup_steps: 0
   warmup_ratio: 0.03
   lr_scheduler_type: cosine
   logging_steps: 50
-  eval_strategy: steps
-  eval_steps: 2000
+  eval_strategy: 'no'
+  eval_steps: 0
   save_strategy: 'no'
   load_best_model_at_end: false
   metric_for_best_model: eval_loss
   greater_is_better: false
   prediction_loss_only: true
-  dataloader_num_workers: 0
+  dataloader_num_workers: 4
   dataloader_pin_memory: true
   max_grad_norm: 0.5
   report_to:
   - tensorboard
 data:
   train_files:
-  - /mnt/data/projects/data_relational_casemarking/perturbed/independent_Anone_Panimate/train_affected.txt
-  - /mnt/data/projects/data_relational_casemarking/perturbed/independent_Anone_Panimate/train_unaffected.txt
+  - /mnt/data/projects/data_relational_casemarking/perturbed/independent_Anone_Panimate/train_affected_x4.5.txt
+  - /mnt/data/projects/data_relational_casemarking/perturbed/independent_Anone_Panimate/train_unaffected_x4.5.txt
   - /mnt/data/projects/data_relational_casemarking/perturbed/independent_Anone_Panimate/train_invalid.txt
   eval_files:
   - /mnt/data/projects/data_relational_casemarking/perturbed/independent_Anone_Panimate/valid_affected.txt
   - /mnt/data/projects/data_relational_casemarking/perturbed/independent_Anone_Panimate/valid_unaffected.txt
   - /mnt/data/projects/data_relational_casemarking/perturbed/independent_Anone_Panimate/valid_invalid.txt
-  oversample_plan:
-    affected: 4.5
-    unaffected: 4.5
