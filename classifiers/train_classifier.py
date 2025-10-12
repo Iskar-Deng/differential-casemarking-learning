@@ -1,12 +1,13 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Train BERT classifiers for animacy or NP-def tasks.
+Train BERT classifiers for animacy / NP-type / definiteness classification.
 
 Usage:
 ------
 python -m classifiers.train_classifier --task animacy --epochs 10 --amp
-python -m classifiers.train_classifier --task npdef --epochs 10 --amp
+python -m classifiers.train_classifier --task nptype --epochs 10 --amp
+python -m classifiers.train_classifier --task definiteness --epochs 10 --amp
 """
 
 import os
@@ -30,15 +31,21 @@ from utils import DATA_PATH, MODEL_PATH
 TASK_CONFIGS = {
     "animacy": {
         "field": "animacy",
-        "labels": {"human": 0, "animal": 1, "inanimate": 2},
-        "targets": ["human", "animal", "inanimate"],
+        "labels": {"animate": 0, "inanimate": 1},
+        "targets": ["animate", "inanimate"],
         "save_dir": "animacy_bert_model",
     },
-    "npdef": {
-        "field": "np_person",
-        "labels": {"p12": 0, "p3": 1, "proper": 2, "common": 3},
-        "targets": ["p12", "p3", "proper", "common"],
-        "save_dir": "npdef_bert_model",
+    "nptype": {
+        "field": "nptype",
+        "labels": {"pronoun": 0, "common": 1},
+        "targets": ["pronoun", "common"],
+        "save_dir": "nptype_bert_model",
+    },
+    "definiteness": {
+        "field": "definiteness",
+        "labels": {"definite": 0, "indef": 1},
+        "targets": ["definite", "indef"],
+        "save_dir": "definiteness_bert_model",
     },
 }
 
@@ -219,7 +226,7 @@ def main(args):
 
 if __name__ == "__main__":
     ap = argparse.ArgumentParser()
-    ap.add_argument("--task", choices=["animacy", "npdef"], required=True, help="Task type")
+    ap.add_argument("--task", choices=["animacy", "nptype", "definiteness"], required=True, help="Task type")
     ap.add_argument("--csv", type=str, default=None,
                     help="Path to training CSV. Default: auto-pick training_data_*<task>*.csv under DATA_PATH.")
     ap.add_argument("--epochs", type=int, default=10)
