@@ -4,8 +4,8 @@
 Train a causal LM from a YAML config file.
 
 Usage:
-  python -m training.train_lm_v2 \
-    --config configs/independent_Anone_Panimate.yaml
+    python -m training.train_lm_v2 \
+        --config configs/independent_Anone_Panimate.yaml
 """
 
 import os
@@ -30,6 +30,7 @@ from transformers import (
     TrainingArguments,
     TrainerCallback,
 )
+
 from utils import CHECKPOINT_PATH, CACHE_PATH, AGENT_MARK, PATIENT_MARK
 
 
@@ -38,13 +39,15 @@ from utils import CHECKPOINT_PATH, CACHE_PATH, AGENT_MARK, PATIENT_MARK
 # -------------------------
 if "PYTORCH_CUDA_ALLOC_CONF" not in os.environ:
     os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "max_split_size_mb:64"
-print(f"[Info] Set PYTORCH_CUDA_ALLOC_CONF={os.environ['PYTORCH_CUDA_ALLOC_CONF']}")
+    print(f"[Info] Set PYTORCH_CUDA_ALLOC_CONF={os.environ['PYTORCH_CUDA_ALLOC_CONF']}")
 
 torch.cuda.empty_cache()
 torch.set_num_threads(1)
 torch.set_num_interop_threads(1)
+
 if torch.backends.cudnn.is_available():
     torch.backends.cudnn.benchmark = True
+
 try:
     torch.backends.cuda.matmul.allow_tf32 = True
     torch.backends.cudnn.allow_tf32 = True
@@ -56,12 +59,15 @@ except Exception:
 # -------------------------
 # Helpers
 # -------------------------
-
 def _expand(p: str) -> str:
     return os.path.expandvars(os.path.expanduser(p))
 
 
-def _load_and_oversample(paths: List[str], oversample_plan: Optional[Dict[str, float]] = None, keep_tmp: bool = False):
+def _load_and_oversample(
+    paths: List[str],
+    oversample_plan: Optional[Dict[str, float]] = None,
+    keep_tmp: bool = False,
+):
     """动态 oversample（整数 + 小数部分）"""
     all_paths = []
     tmp_files = []
@@ -87,18 +93,24 @@ def _load_and_oversample(paths: List[str], oversample_plan: Optional[Dict[str, f
             n_take = max(1, int(math.ceil(len(lines) * frac)))
             random.seed(42)
             sampled = random.sample(lines, n_take)
+
             tmpfile = tempfile.NamedTemporaryFile(
                 mode="w", delete=False, encoding="utf-8", suffix="_partial.txt"
             )
             for line in sampled:
                 tmpfile.write(line + "\n")
             tmpfile.close()
+
             tmp_files.append(tmpfile.name)
-            print(f"[Info] fractional oversample: {p_str} +{frac:.2f}x ({n_take} lines) → {tmpfile.name}")
+            print(
+                f"[Info] fractional oversample: {p_str} +{frac:.2f}x ({n_take} lines) → {tmpfile.name}"
+            )
+
             all_paths.append(tmpfile.name)
 
     if not keep_tmp:
         import atexit
+
         def _cleanup():
             for f in tmp_files:
                 try:
@@ -106,6 +118,7 @@ def _load_and_oversample(paths: List[str], oversample_plan: Optional[Dict[str, f
                     print(f"[Clean] removed tmp oversample file: {f}")
                 except Exception:
                     pass
+
         atexit.register(_cleanup)
 
     return all_paths
@@ -114,6 +127,7 @@ def _load_and_oversample(paths: List[str], oversample_plan: Optional[Dict[str, f
 def _build_dataset(files: List[str]):
     if not files:
         return None
+
     ds_list = []
     for f in files:
         f = _expand(f)
@@ -126,6 +140,7 @@ def _build_dataset(files: List[str]):
         else:
             raise ValueError(f"不支持的文件类型：{f}")
         ds_list.append(ds)
+
     return concatenate_datasets(ds_list) if len(ds_list) > 1 else ds_list[0]
 
 
@@ -134,7 +149,10 @@ def _group_texts(examples: Dict[str, list], block_size: int):
     concatenated = {k: sum(examples[k], []) for k in keys}
     total_len = len(concatenated.get("input_ids", []))
     total_len = (total_len // block_size) * block_size
-    result = {k: [t[i:i + block_size] for i in range(0, total_len, block_size)] for k, t in concatenated.items()}
+    result = {
+        k: [t[i:i + block_size] for i in range(0, total_len, block_size)]
+        for k, t in concatenated.items()
+    }
     if "input_ids" not in result:
         result["input_ids"] = []
     result["labels"] = result["input_ids"].copy()
@@ -161,7 +179,6 @@ def _count_total_tokens(tokenized_ds, batch_size: int = 1000) -> int:
 # -------------------------
 # Callbacks
 # -------------------------
-
 class ValidPPLLogger(TrainerCallback):
     def __init__(self, csv_path: Path):
         self.csv_path = csv_path
@@ -222,7 +239,6 @@ class DynamicCheckpointSaver(TrainerCallback):
 # -------------------------
 # Main
 # -------------------------
-
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--config", type=str, required=True, help="Path to YAML config file")
@@ -249,6 +265,7 @@ def main():
     cache_dir = Path(cfg["artifacts"]["cache_dir"]).expanduser().resolve()
     run_dir.mkdir(parents=True, exist_ok=True)
     cache_dir.mkdir(parents=True, exist_ok=True)
+
     os.environ["HF_HOME"] = str(cache_dir)
     os.environ["HF_DATASETS_CACHE"] = str(cache_dir / "datasets")
 
@@ -302,9 +319,20 @@ def main():
     raw_train_tokens = _count_total_tokens(train_tok)
     usable_train_tokens = (raw_train_tokens // block_size) * block_size
 
-    train_tok = train_tok.map(lambda ex: _group_texts(ex, block_size), batched=True, batch_size=1000, num_proc=1)
+    train_tok = train_tok.map(
+        lambda ex: _group_texts(ex, block_size),
+        batched=True,
+        batch_size=1000,
+        num_proc=1,
+    )
+
     if eval_tok:
-        eval_tok = eval_tok.map(lambda ex: _group_texts(ex, block_size), batched=True, batch_size=1000, num_proc=1)
+        eval_tok = eval_tok.map(
+            lambda ex: _group_texts(ex, block_size),
+            batched=True,
+            batch_size=1000,
+            num_proc=1,
+        )
 
     collator = DataCollatorForLanguageModeling(tokenizer=tokenizer, mlm=False)
     training_args = TrainingArguments(output_dir=str(run_dir), seed=seed, disable_tqdm=False, **targs)
@@ -325,7 +353,11 @@ def main():
         csv_path = run_dir / "valid_metrics.csv"
         trainer.add_callback(ValidPPLLogger(csv_path))
 
-    tokens_per_step = training_args.per_device_train_batch_size * training_args.gradient_accumulation_steps * block_size
+    tokens_per_step = (
+        training_args.per_device_train_batch_size
+        * training_args.gradient_accumulation_steps
+        * block_size
+    )
     trainer.add_callback(ThroughputLogger(tokens_per_step))
 
     resume_from = None

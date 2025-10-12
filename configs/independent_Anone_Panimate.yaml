@@ -16,8 +16,8 @@ artifacts:
   run_dir: /home/hd49/relational-casemarking-learning/checkpoints/independent_Anone_Panimate
 training_arguments:
   max_steps: 150000
-  per_device_train_batch_size: 16
-  gradient_accumulation_steps: 4
+  per_device_train_batch_size: 8
+  gradient_accumulation_steps: 8
   per_device_eval_batch_size: 2
   optim: adamw_torch
   bf16: false
@@ -36,7 +36,7 @@ training_arguments:
   metric_for_best_model: eval_loss
   greater_is_better: false
   prediction_loss_only: true
-  dataloader_num_workers: 4
+  dataloader_num_workers: 0
   dataloader_pin_memory: true
   max_grad_norm: 0.5
   report_to:
