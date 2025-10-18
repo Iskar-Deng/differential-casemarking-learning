@@ -2,51 +2,60 @@
 # -*- coding: utf-8 -*-
 
 """
-Evaluate GPT-2 checkpoints on a JSONL validation set, compute PPL,
-and save CSV/TXT results. Uses utils.CHECKPOINT_PATH and utils.DATA_PATH.
+Evaluate all GPT-2 checkpoints under CHECKPOINT_PATH/<run_id>
+on the combined test set (affected + unaffected + invalid),
+compute overall PPL per checkpoint, and save CSV + PNG.
 
-Examples:
-    python eval_ppl.py --run-id rule_A+P
-    python eval_ppl.py --run-id rule_A+P_with_invalid
+Usage:
+    python -m evaluation.eval_ppl --run-id independent_Anone_Pdefinite
 """
 
 import argparse
 import json
 from pathlib import Path
-from typing import List, Dict, Tuple, Optional
+from typing import List, Dict, Tuple
 
 import torch
 from transformers import GPT2Tokenizer, GPT2LMHeadModel
-import pandas as pd
 from tqdm.auto import tqdm
+import pandas as pd
+import matplotlib.pyplot as plt
+
+# ✅ 引用 utils 中的路径
 from utils import CHECKPOINT_PATH, DATA_PATH
 
 
 # ----------------------------
-# Data loading
+# Load text files
 # ----------------------------
-def load_jsonl_texts(path: Path) -> List[str]:
-    path = Path(path)
-    texts: List[str] = []
-    with path.open("r", encoding="utf-8") as f:
-        for line in f:
-            line = line.strip()
-            if not line:
-                continue
-            try:
-                obj = json.loads(line)
-            except json.JSONDecodeError:
-                continue
-            if "text" in obj:
-                texts.append(obj["text"])
+def load_texts(path: Path) -> List[str]:
+    texts = []
+    if not path.exists():
+        raise FileNotFoundError(f"File not found: {path}")
+    if path.suffix == ".jsonl":
+        with path.open("r", encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    obj = json.loads(line)
+                    if "text" in obj:
+                        texts.append(obj["text"])
+                except json.JSONDecodeError:
+                    continue
+    else:
+        with path.open("r", encoding="utf-8") as f:
+            for line in f:
+                if line.strip():
+                    texts.append(line.strip())
     return texts
 
 
 # ----------------------------
-# Model loading
+# Load model + tokenizer
 # ----------------------------
 def load_model(checkpoint_path: Path, device: str):
-    checkpoint_path = Path(checkpoint_path)
     tokenizer = GPT2Tokenizer.from_pretrained(str(checkpoint_path))
     model = GPT2LMHeadModel.from_pretrained(str(checkpoint_path))
     tokenizer.pad_token = tokenizer.eos_token
@@ -55,245 +64,157 @@ def load_model(checkpoint_path: Path, device: str):
     model.eval().to(device)
     return model, tokenizer
 
+
+# ----------------------------
+# Compute NLL for a text
+# ----------------------------
 @torch.no_grad()
-def negative_log_likelihood_for_text(
-    model: GPT2LMHeadModel,
-    tokenizer: GPT2Tokenizer,
-    text: str,
-    device: str,
-    show_window_progress: bool = False, 
-    position: int = 2,
-    leave: bool = False,
-    desc: Optional[str] = None,
-) -> Tuple[float, int]:
+def negative_log_likelihood_for_text(model, tokenizer, text: str, device: str) -> Tuple[float, int]:
     enc = tokenizer(text, return_tensors="pt")
     input_ids = enc.input_ids.to(device)
 
-    context_length = getattr(model.config, "n_positions", None)
-    if context_length is None:
-        context_length = getattr(model.config, "max_position_embeddings", 1024)
-    context_length = int(context_length)
-
+    context_length = getattr(model.config, "n_positions", 1024)
     overlap = 50
     stride = max(context_length - overlap, 1)
-
-    nll_total = 0.0
-    total_target_tokens = 0
-
+    nll_total, total_tokens = 0.0, 0
     seq_len = input_ids.size(1)
-    indices = list(range(0, seq_len, stride))
 
-    iterator = indices
-    if show_window_progress:
-        iterator = tqdm(indices, desc=desc or "Windows", unit="win",
-                        position=position, leave=leave, dynamic_ncols=True)
-
-    for i in iterator:
-        begin_loc = max(i + stride - context_length, 0)  
-        end_loc   = min(i + stride, seq_len)             
+    for i in range(0, seq_len, stride):
+        begin_loc = max(i + stride - context_length, 0)
+        end_loc = min(i + stride, seq_len)
         input_ids_window = input_ids[:, begin_loc:end_loc]
-
         trg_len = end_loc - i
         labels = input_ids_window.clone()
         labels[:, :-trg_len] = -100
-
         outputs = model(input_ids=input_ids_window, labels=labels)
         if trg_len > 0:
             nll_total += outputs.loss.item() * trg_len
-            total_target_tokens += trg_len
-
+            total_tokens += trg_len
         if end_loc == seq_len:
             break
 
-    return float(nll_total), int(total_target_tokens)
+    return float(nll_total), int(total_tokens)
 
 
+# ----------------------------
+# Compute dataset PPL
+# ----------------------------
 @torch.no_grad()
-def dataset_ppl(
-    model: GPT2LMHeadModel,
-    tokenizer: GPT2Tokenizer,
-    texts: List[str],
-    device: str,
-    show_text_progress: bool = False,   
-    text_desc: Optional[str] = None,
-    position: int = 1,
-    leave: bool = False,
-    show_window_progress: bool = False, 
-) -> Dict[str, float]:
-    total_nll = 0.0
-    total_tokens = 0
-
-    iterator = texts
-    if show_text_progress:
-        iterator = tqdm(
-            texts,
-            desc=text_desc or "Evaluating texts",
-            unit="text",
-            position=position,
-            leave=leave,
-            dynamic_ncols=True,
-        )
-
-    for t in iterator:
-        nll, ntoks = negative_log_likelihood_for_text(
-            model, tokenizer, t,
-            device=device,
-            show_window_progress=show_window_progress,
-            position=position + 1,
-            leave=False,
-            desc="Windows",
-        )
+def dataset_ppl(model, tokenizer, texts: List[str], device: str) -> Dict[str, float]:
+    total_nll, total_tokens = 0.0, 0
+    for t in tqdm(texts, desc="texts", leave=False, dynamic_ncols=True):
+        nll, ntoks = negative_log_likelihood_for_text(model, tokenizer, t, device)
         total_nll += nll
         total_tokens += ntoks
-
     mean_nll = total_nll / max(total_tokens, 1)
     ppl = float(torch.exp(torch.tensor(mean_nll)).item())
     return {"ppl": ppl, "mean_nll": mean_nll, "tokens": total_tokens}
 
 
 # ----------------------------
-# Checkpoint discovery
+# Find checkpoints
 # ----------------------------
-def find_checkpoints_recursive(root: Path) -> List[Path]:
-    root = Path(root)
-    if root.is_dir() and root.name.startswith("checkpoint-"):
-        cks = [root]
-    else:
-        cks = [p for p in root.rglob("checkpoint-*") if p.is_dir()]
-
-    def step_key(p: Path):
-        try:
-            return int(p.name.split("-")[-1])
-        except Exception:
-            return float("inf")
-
-    cks.sort(key=step_key)
+def find_checkpoints(run_dir: Path) -> List[Path]:
+    cks = [p for p in run_dir.glob("checkpoint-*") if p.is_dir()]
+    cks.sort(key=lambda p: int(p.name.split("-")[-1]))
     return cks
-
-
-# ----------------------------
-# Path resolver from run-id
-# ----------------------------
-def resolve_paths_from_run_id(run_id: str) -> Dict[str, Path]:
-    use_with_invalid = run_id.endswith("_with_invalid")
-    base_name = run_id[:-13] if use_with_invalid else run_id  # 去掉 '_with_invalid'
-    subset = "train_with_invalid" if use_with_invalid else "train_without_invalid"
-
-    ckpt_root = Path(CHECKPOINT_PATH) / run_id
-    val_path = Path(DATA_PATH) / "perturbed_model" / base_name / subset / "validation.jsonl"
-
-    return {
-        "ckpt_root": ckpt_root,
-        "val_path": val_path,
-        "subset": subset,
-        "base_name": base_name,
-    }
 
 
 # ----------------------------
 # Main
 # ----------------------------
 def main():
-    parser = argparse.ArgumentParser(description="Evaluate PPL for GPT-2 checkpoints on a JSONL set (by run-id).")
-    parser.add_argument("--run-id", type=str, required=True,
-                        help="e.g., rule_A+P or rule_A+P_with_invalid (controls data subset and checkpoint root).")
-    parser.add_argument("--max-checkpoints", type=int, default=None,
-                        help="If set, evaluate at most this many checkpoints.")
-    parser.add_argument("--show-window-progress", action="store_true",
-                        help="Show sliding-window progress (off by default).")
-    parser.add_argument("--out-dir", type=Path, default=Path("results"),
-                        help="Base output directory. Files will be saved under <out-dir>/<run-id>/")
-    parser.add_argument("--no-plot", action="store_true", help="(Deprecated) plotting is disabled by default.")
+    parser = argparse.ArgumentParser(description="Evaluate combined PPL for all checkpoints by run_id.")
+    parser.add_argument("--run-id", type=str, required=True, help="Run ID, e.g. independent_Anone_Pdefinite")
     args = parser.parse_args()
 
-    paths = resolve_paths_from_run_id(args.run_id)
-    ckpt_root: Path = paths["ckpt_root"]
-    val_path: Path = paths["val_path"]
-
-    out_dir = args.out_dir / args.run_id      # results/<run-id>/
-    out_dir.mkdir(parents=True, exist_ok=True)
-    print(f"[Info] Output directory: {out_dir.resolve()}")
-
+    run_id = args.run_id
     device = "cuda" if torch.cuda.is_available() else "cpu"
-    torch.set_grad_enabled(False)
     print(f"[Info] Using device: {device}")
-    print(f"[Info] Run ID: {args.run_id}")
-    print(f"[Info] Checkpoint root: {ckpt_root}")
-    print(f"[Info] Validation file: {val_path}")
 
-    # Load validation texts
-    texts = load_jsonl_texts(val_path)
-    print(f"[Info] Loaded {len(texts)} validation texts")
-    if len(texts) == 0:
-        raise RuntimeError("Validation set is empty or path is wrong.")
+    # === Resolve paths ===
+    ckpt_root = Path(CHECKPOINT_PATH) / run_id
+    data_root = Path(DATA_PATH) / "perturbed" / run_id
+    out_dir = Path("results") / run_id
+    out_dir.mkdir(parents=True, exist_ok=True)
 
-    # Discover checkpoints
-    checkpoints = find_checkpoints_recursive(ckpt_root)
-    if args.max_checkpoints is not None:
-        checkpoints = checkpoints[: args.max_checkpoints]
+    # === Load and merge test sets ===
+    test_paths = [
+        data_root / "test_affected.txt",
+        data_root / "test_unaffected.txt",
+        data_root / "test_invalid.txt",
+    ]
+    all_texts = []
+    for p in test_paths:
+        texts = load_texts(p)
+        print(f"[Info] Loaded {len(texts)} from {p}")
+        all_texts.extend(texts)
+
+    if not all_texts:
+        raise RuntimeError("No test texts found.")
+    print(f"[Info] Combined test size: {len(all_texts)}")
+
+    # === Find checkpoints ===
+    checkpoints = find_checkpoints(ckpt_root)
     print(f"[Info] Found {len(checkpoints)} checkpoints under {ckpt_root}")
-    if len(checkpoints) == 0:
-        raise RuntimeError("No checkpoints found. Check folder structure.")
+    if not checkpoints:
+        raise RuntimeError("No checkpoints found.")
 
-    results: List[Dict] = []
+    results = []
 
-    # Outer: checkpoint-level progress
-    for ckpt in tqdm(checkpoints, desc="Evaluating checkpoints", unit="ckpt", position=0, dynamic_ncols=True):
+    for ckpt in tqdm(checkpoints, desc="Evaluating checkpoints", dynamic_ncols=True):
+        try:
+            step = int(ckpt.name.split("-")[-1])
+        except ValueError:
+            continue
+
         try:
             model, tokenizer = load_model(ckpt, device)
         except Exception as e:
             tqdm.write(f"[Warn] Failed to load {ckpt}: {e}")
             continue
 
-        # Inner: text-level progress inside each checkpoint
         try:
-            metrics = dataset_ppl(
-                model, tokenizer, texts,
-                device=device,
-                show_text_progress=True,
-                text_desc=f"texts @ {ckpt.name}",
-                position=1,
-                leave=False,
-                show_window_progress=args.show_window_progress,
-            )
+            metrics = dataset_ppl(model, tokenizer, all_texts, device)
+            results.append({
+                "checkpoint": str(ckpt),
+                "step": step,
+                "ppl": metrics["ppl"],
+                "mean_nll": metrics["mean_nll"],
+                "tokens": metrics["tokens"],
+            })
         except Exception as e:
-            tqdm.write(f"[Warn] Failed to evaluate {ckpt}: {e}")
+            tqdm.write(f"[Warn] Failed {ckpt}: {e}")
             continue
 
-        try:
-            step = int(ckpt.name.split("-")[-1])
-        except Exception:
-            step = None
-
-        results.append({
-            "checkpoint": str(ckpt),
-            "step": step,
-            "ppl": metrics["ppl"],
-            "mean_nll": metrics["mean_nll"],
-            "tokens": metrics["tokens"],
-        })
+        del model
+        torch.cuda.empty_cache()
 
     if not results:
-        raise RuntimeError("No successful results. See warnings above.")
+        raise RuntimeError("No successful evaluations.")
 
-    # Save results
-    df = pd.DataFrame(results).sort_values(by=["step"], na_position="last").reset_index(drop=True)
+    # === Save CSV ===
+    df = pd.DataFrame(results).sort_values("step").reset_index(drop=True)
+    csv_path = out_dir / "results.csv"
+    df.to_csv(csv_path, index=False)
+    print(f"[Info] Saved CSV: {csv_path}")
 
-    out_csv = out_dir / f"{args.run_id}_results.csv"
-    out_txt = out_dir / f"{args.run_id}_results.txt"
+    # === Plot curve ===
+    plt.figure(figsize=(8, 5))
+    plt.plot(df["step"], df["ppl"], marker="o", label="Combined Test Set")
+    plt.xlabel("Checkpoint step")
+    plt.ylabel("Perplexity (PPL)")
+    plt.title(f"Combined Test PPL ({run_id})")
+    plt.grid(alpha=0.3)
+    plt.legend()
+    plt.tight_layout()
+    png_path = out_dir / "ppl_curve.png"
+    plt.savefig(png_path, dpi=200)
+    print(f"[Info] Saved plot: {png_path}")
 
-    df.to_csv(out_csv, index=False)
-    with out_txt.open("w", encoding="utf-8") as f:
-        for _, r in df.iterrows():
-            f.write(f"{r['step']}\t{r['ppl']:.6f}\t{r['mean_nll']:.6f}\t{int(r['tokens'])}\t{r['checkpoint']}\n")
-
-    print(f"[Info] Saved: {out_csv.resolve()}")
-    print(f"[Info] Saved: {out_txt.resolve()}")
-
-    # Best checkpoint by PPL
+    # === Print best checkpoint ===
     best = df.loc[df["ppl"].idxmin()]
-    print("\n[Best checkpoint by PPL]")
-    print(best)
+    print(f"\n[Best checkpoint] step={best['step']} ppl={best['ppl']:.4f} ({best['checkpoint']})")
 
 
 if __name__ == "__main__":

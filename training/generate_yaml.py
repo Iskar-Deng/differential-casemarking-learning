@@ -1,142 +1,212 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Generate a YAML config from a perturbation output directory.
+generate_config_static_v3.py (A100-80GB 极致速度版)
+------------------------------------------------
+功能:
+1. 自动合并短句（缓解 I/O 瓶颈，提升 tokenization 速度）
+2. 静态 oversample
+3. 生成 YAML 训练配置（针对 RunPod A100-80GB 高吞吐环境）
 
-新增功能:
-  --oversample N  将 train_affected.txt 重复采样 N 倍 (默认 1)
-  用于增加标记样本在训练集中的占比，提高学习信号强度。
-
-Example:
-  python -m training.generate_yaml \
-    --input_dir data/perturbed_local/local_Anone-forward_Pp3-forward \
-    --oversample 3
+主要优化:
+✅ 合并短句 → 每行约 1000 字符
+✅ batch=96 × grad_acc=2 → 吃满显存 (~75GB)
+✅ 关闭 gradient checkpointing → 最大化算力利用
+✅ 启用 bf16 原生加速
+✅ 稀疏 checkpoint 频率，减少 I/O 干扰
 """
 
 import argparse
-from pathlib import Path
 import yaml
-from utils import DATA_PATH, CONFIG_PATH, CHECKPOINT_PATH, CACHE_PATH
+import math
+import random
+from pathlib import Path
+from utils import CONFIG_PATH, CHECKPOINT_PATH, CACHE_PATH
 
-TEMPLATE = {
-    "run_id": "__RUN_ID__",
-    "model_name": "gpt2",
-    "effective_bsz": 96,
-    "seed": 42,
-    "block_size": 1024,
-    "resume": True,
-    "resume_checkpoint": None,
-    "checkpoint_frequency": [[50, 500], [100, 1000], [1000, 10000]],
-    "artifacts": {
-        "cache_dir": "__CACHE_DIR__",
-        "run_dir": "__RUN_DIR__",
-    },
-    "training_arguments": {
-        "max_steps": 8000,
-        "per_device_train_batch_size": 4,
-        "optim": "adamw_torch_fused",
-        "bf16": True,
-        "fp16": False,
-        "gradient_checkpointing": False,
-        "learning_rate": 2e-5,
-        "weight_decay": 0.01,
-        "warmup_steps": 0,
-        "warmup_ratio": 0.03,
-        "lr_scheduler_type": "cosine",
-        "logging_steps": 50,
-        "eval_steps": 1000,
-        "evaluation_strategy": "steps",
-        "save_strategy": "steps",
-        "load_best_model_at_end": False,
-        "metric_for_best_model": "eval_loss",
-        "greater_is_better": False,
-        "prediction_loss_only": True,
-        "dataloader_num_workers": 6,
-        "dataloader_pin_memory": True,
-        "report_to": ["tensorboard"],
-    },
-    "data": {"train_files": [], "eval_files": []},
-}
 
+# =====================================================
+# Helpers
+# =====================================================
+
+def merge_short_lines(path: Path, max_chars: int = 1000) -> Path:
+    """将过短的句子行合并成较长块，提高训练效率。"""
+    merged_path = path.with_name(f"{path.stem}_merged.txt")
+    with open(path, "r", encoding="utf-8") as f, open(merged_path, "w", encoding="utf-8") as out:
+        buf, length = [], 0
+        for line in f:
+            line = line.strip()
+            if not line:
+                continue
+            if length + len(line) > max_chars:
+                out.write(" ".join(buf) + "\n")
+                buf, length = [line], len(line)
+            else:
+                buf.append(line)
+                length += len(line)
+        if buf:
+            out.write(" ".join(buf) + "\n")
+    print(f"[Merge] {path.name} → {merged_path.name}")
+    return merged_path
+
+
+def static_oversample(path: Path, ratio: float, seed: int = 42) -> Path:
+    """读取文件并生成静态 oversample 版本"""
+    if ratio <= 1.0:
+        return path
+    with open(path, "r", encoding="utf-8") as f:
+        lines = [x.strip() for x in f if x.strip()]
+    if not lines:
+        print(f"[Warn] 文件为空：{path}")
+        return path
+    n = len(lines)
+    n_full = int(ratio)
+    frac = ratio - n_full
+    oversampled = lines * n_full
+    if frac > 1e-6:
+        random.seed(seed)
+        n_take = max(1, int(math.ceil(n * frac)))
+        sampled = random.sample(lines, n_take)
+        oversampled.extend(sampled)
+    out_path = path.with_name(f"{path.stem}_x{ratio}.txt")
+    with open(out_path, "w", encoding="utf-8") as f:
+        for line in oversampled:
+            f.write(line + "\n")
+    print(f"[Oversample] {path.name}: {n} → {len(oversampled)} lines ({ratio}x) → {out_path.name}")
+    return out_path
+
+
+# =====================================================
+# Config builder (A100 极致版)
+# =====================================================
+
+def build_cfg(base_dir: Path, oversample: float):
+    run_id = base_dir.name
+
+    def get_paths(split: str):
+        return {
+            "affected": base_dir / f"{split}_affected.txt",
+            "unaffected": base_dir / f"{split}_unaffected.txt",
+            "invalid": base_dir / f"{split}_invalid.txt",
+        }
+
+    train_paths = get_paths("train")
+    eval_paths = get_paths("valid")
+
+    merged_train_paths = {k: merge_short_lines(v) for k, v in train_paths.items()}
+    merged_eval_paths = {k: merge_short_lines(v) for k, v in eval_paths.items()}
+
+    new_train_paths = {
+        "affected": static_oversample(merged_train_paths["affected"], oversample),
+        "unaffected": static_oversample(merged_train_paths["unaffected"], oversample),
+        "invalid": merged_train_paths["invalid"],
+    }
+
+    cfg = {
+        "run_id": run_id,
+        "model_name": "gpt2",
+        "seed": 42,
+        "block_size": 1024,
+        "resume": True,
+        "resume_checkpoint": None,
+        "checkpoint_frequency": [
+            [500, 10000],
+            [1000, 50000],
+            [10000, 200000],
+        ],
+        "artifacts": {
+            "cache_dir": f"/workspace/differential-casemarking-learning/cache/{run_id}",
+            "run_dir": f"/workspace/differential-casemarking-learning/checkpoints/{run_id}",
+        },
+        "training_arguments": {
+            "max_steps": 150000,
+            "learning_rate": 2.0e-05,
+            "weight_decay": 0.01,
+            "warmup_steps": 0,
+            "warmup_ratio": 0.03,
+            "lr_scheduler_type": "cosine",
+
+            # === 🚀 A100 极致速度参数 ===
+            "per_device_train_batch_size": 96,
+            "gradient_accumulation_steps": 2,
+            "per_device_eval_batch_size": 64,
+            "optim": "adamw_torch",
+            "bf16": True,
+            "fp16": False,
+            "gradient_checkpointing": False,
+            "dataloader_num_workers": 2,
+            "dataloader_pin_memory": True,
+            "max_grad_norm": 0.5,
+
+            # === 日志与保存策略 ===
+            "logging_steps": 50,
+            "eval_strategy": "no",
+            "eval_steps": 0,
+            "save_strategy": "no",
+            "load_best_model_at_end": False,
+            "metric_for_best_model": "eval_loss",
+            "greater_is_better": False,
+            "prediction_loss_only": True,
+            "remove_unused_columns": False,
+            "report_to": ["tensorboard"],
+        },
+        "data": {
+            "train_files": [
+                str(new_train_paths["affected"]),
+                str(new_train_paths["unaffected"]),
+                str(new_train_paths["invalid"]),
+            ],
+            "eval_files": [
+                str(merged_eval_paths["affected"]),
+                str(merged_eval_paths["unaffected"]),
+                str(merged_eval_paths["invalid"]),
+            ],
+        },
+    }
+
+    print(f"[A100 Config] batch={cfg['training_arguments']['per_device_train_batch_size']} × "
+          f"grad_acc={cfg['training_arguments']['gradient_accumulation_steps']} "
+          f"(effective={cfg['training_arguments']['per_device_train_batch_size'] * cfg['training_arguments']['gradient_accumulation_steps']})")
+
+    return cfg
+
+
+# =====================================================
+# Main
+# =====================================================
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--input_dir", type=str, required=True,
-                    help="Perturbation output directory")
-    ap.add_argument("--eval-split", type=str, choices=["valid", "test"], default="valid")
-    ap.add_argument("--oversample", type=int, default=1,
-                    help="重复采样 train_affected.txt N 次 (默认 1 表示不重复)")
+    ap.add_argument("--input_dir", type=str, required=True, help="perturbed 数据目录")
+    ap.add_argument("--oversample", type=float, default=1.0, help="静态 oversample 倍数")
     ap.add_argument("--overwrite", action="store_true")
     args = ap.parse_args()
 
     base_dir = Path(args.input_dir).resolve()
     if not base_dir.exists():
-        raise FileNotFoundError(f"Directory not found: {base_dir}")
+        raise FileNotFoundError(f"{base_dir} 不存在")
 
     run_id = base_dir.name
-
-    def pick_paths(split: str):
-        affected = list(base_dir.glob(f"{split}_affected.txt"))
-        unaffected = list(base_dir.glob(f"{split}_unaffected.txt"))
-        invalid = list(base_dir.glob(f"{split}_invalid.txt"))
-        if not affected or not unaffected:
-            raise RuntimeError(f"Split '{split}' not found under {base_dir}")
-        paths = {
-            "affected": str(affected[0]),
-            "unaffected": str(unaffected[0]),
-        }
-        if invalid:
-            paths["invalid"] = str(invalid[0])
-        return paths
-
-    train_paths = pick_paths("train")
-    eval_paths = pick_paths(args.eval_split)
-
-    # 关键：oversample 处理
-    train_files = []
-    if args.oversample > 1:
-        train_files.extend([train_paths["affected"]] * args.oversample)
-        train_files.extend([train_paths["unaffected"]] * args.oversample)
-    else:
-        train_files.append(train_paths["affected"])
-        train_files.append(train_paths["unaffected"])
-    if "invalid" in train_paths:
-        train_files.append(train_paths["invalid"])
-
-
-    eval_files = [eval_paths["affected"], eval_paths["unaffected"]]
-    if "invalid" in eval_paths:
-        eval_files.append(eval_paths["invalid"])
-
-    cfg = dict(TEMPLATE)
-    cfg["run_id"] = run_id
-    cfg["artifacts"] = {
-        "cache_dir": str(Path(CACHE_PATH) / run_id),
-        "run_dir": str(Path(CHECKPOINT_PATH) / run_id),
-    }
-    cfg["data"] = {"train_files": train_files, "eval_files": eval_files}
+    cfg = build_cfg(base_dir, args.oversample)
 
     out_dir = Path(CONFIG_PATH)
     out_dir.mkdir(parents=True, exist_ok=True)
     out_yaml = out_dir / f"{run_id}.yaml"
-    if out_yaml.exists() and not args.overwrite:
-        raise FileExistsError(f"{out_yaml} already exists. Use --overwrite to replace it.")
 
-    with out_yaml.open("w", encoding="utf-8") as f:
+    if out_yaml.exists() and not args.overwrite:
+        raise FileExistsError(f"{out_yaml} 已存在。使用 --overwrite 覆盖。")
+
+    with open(out_yaml, "w", encoding="utf-8") as f:
         yaml.safe_dump(cfg, f, sort_keys=False, allow_unicode=True)
 
-    print(f"[OK] wrote config: {out_yaml}")
-    print(f"  run_id     : {run_id}")
-    print(f"  eval_split : {args.eval_split}")
-    print(f"  oversample : {args.oversample}x affected")
-    print(f"  cache_dir  : {cfg['artifacts']['cache_dir']}")
-    print(f"  run_dir    : {cfg['artifacts']['run_dir']}")
-    print(f"  train_files ({len(train_files)}):")
-    for p in train_files:
-        print("   -", p)
-    print(f"  eval_files ({len(eval_files)}):")
-    for p in eval_files:
-        print("   -", p)
+    print(f"\n✅ [OK] 写入配置文件: {out_yaml}")
+    print(f"  oversample = {args.oversample}x (短句合并 + 静态复制)")
+    print("=====================================")
+    print("train_files:")
+    for path in cfg["data"]["train_files"]:
+        print(" -", path)
+    print("eval_files:")
+    for path in cfg["data"]["eval_files"]:
+        print(" -", path)
 
 
 if __name__ == "__main__":

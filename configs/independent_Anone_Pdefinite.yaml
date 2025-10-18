@@ -1,0 +1,51 @@
+run_id: independent_Anone_Pdefinite
+model_name: gpt2
+seed: 42
+block_size: 1024
+resume: true
+resume_checkpoint: null
+checkpoint_frequency:
+- - 1000
+  - 20000
+- - 5000
+  - 100000
+artifacts:
+  cache_dir: /workspace/differential-casemarking-learning/cache/independent_Anone_Pdefinite
+  run_dir: /workspace/differential-casemarking-learning/checkpoints/independent_Anone_Pdefinite
+training_arguments:
+  max_steps: 70000
+  learning_rate: 2.0e-05
+  weight_decay: 0.01
+  warmup_steps: 0
+  warmup_ratio: 0.03
+  lr_scheduler_type: cosine
+  per_device_train_batch_size: 48
+  gradient_accumulation_steps: 2
+  per_device_eval_batch_size: 64
+  optim: adamw_torch
+  bf16: true
+  fp16: false
+  gradient_checkpointing: false
+  dataloader_num_workers: 2
+  dataloader_pin_memory: true
+  max_grad_norm: 0.5
+  logging_steps: 50
+  eval_strategy: 'no'
+  eval_steps: 0
+  save_strategy: 'no'
+  load_best_model_at_end: false
+  metric_for_best_model: eval_loss
+  greater_is_better: false
+  prediction_loss_only: true
+  remove_unused_columns: false
+  report_to:
+  - tensorboard
+data:
+  train_files:
+  - /workspace/differential-casemarking-learning/data/perturbed/independent_Anone_Pdefinite/train_affected_merged_x20.0.txt
+  - /workspace/differential-casemarking-learning/data/perturbed/independent_Anone_Pdefinite/train_unaffected_merged_x20.0.txt
+  - /workspace/differential-casemarking-learning/data/perturbed/independent_Anone_Pdefinite/train_invalid_merged.txt
+  eval_files:
+  - /workspace/differential-casemarking-learning/data/perturbed/independent_Anone_Pdefinite/valid_affected_merged.txt
+  - /workspace/differential-casemarking-learning/data/perturbed/independent_Anone_Pdefinite/valid_unaffected_merged.txt
+  - /workspace/differential-casemarking-learning/data/perturbed/independent_Anone_Pdefinite/valid_invalid_merged.txt

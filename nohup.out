@@ -1,0 +1,90 @@
+mfs#us-wa-1.runpod.net:9421  479T  224T  256T  47% /workspace
+/root/miniconda3/envs/gpt2-exp/lib/python3.10/site-packages/transformers/utils/hub.py:110: FutureWarning: Using `TRANSFORMERS_CACHE` is deprecated and will be removed in v5 of Transformers. Use `HF_HOME` instead.
+  warnings.warn(
+Traceback (most recent call last):
+  File "/root/miniconda3/envs/gpt2-exp/lib/python3.10/runpy.py", line 196, in _run_module_as_main
+    return _run_code(code, main_globals, None,
+  File "/root/miniconda3/envs/gpt2-exp/lib/python3.10/runpy.py", line 86, in _run_code
+    exec(code, run_globals)
+  File "/workspace/differential-casemarking-learning/training/train_lm_v2.py", line 58, in <module>
+    from transformers import (
+  File "<frozen importlib._bootstrap>", line 1075, in _handle_fromlist
+  File "/root/miniconda3/envs/gpt2-exp/lib/python3.10/site-packages/transformers/utils/import_utils.py", line 2317, in __getattr__
+    module = self._get_module(self._class_to_module[name])
+  File "/root/miniconda3/envs/gpt2-exp/lib/python3.10/site-packages/transformers/utils/import_utils.py", line 2345, in _get_module
+    return importlib.import_module("." + module_name, self.__name__)
+  File "/root/miniconda3/envs/gpt2-exp/lib/python3.10/importlib/__init__.py", line 126, in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+  File "/root/miniconda3/envs/gpt2-exp/lib/python3.10/site-packages/transformers/models/auto/tokenization_auto.py", line 40, in <module>
+    from .auto_factory import _LazyAutoMapping
+  File "/root/miniconda3/envs/gpt2-exp/lib/python3.10/site-packages/transformers/models/auto/auto_factory.py", line 43, in <module>
+    from ...generation import GenerationMixin
+  File "<frozen importlib._bootstrap>", line 1075, in _handle_fromlist
+  File "/root/miniconda3/envs/gpt2-exp/lib/python3.10/site-packages/transformers/utils/import_utils.py", line 2317, in __getattr__
+    module = self._get_module(self._class_to_module[name])
+  File "/root/miniconda3/envs/gpt2-exp/lib/python3.10/site-packages/transformers/utils/import_utils.py", line 2345, in _get_module
+    return importlib.import_module("." + module_name, self.__name__)
+  File "/root/miniconda3/envs/gpt2-exp/lib/python3.10/importlib/__init__.py", line 126, in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+  File "/root/miniconda3/envs/gpt2-exp/lib/python3.10/site-packages/transformers/generation/utils.py", line 43, in <module>
+    from ..masking_utils import create_masks_for_generate
+  File "/root/miniconda3/envs/gpt2-exp/lib/python3.10/site-packages/transformers/masking_utils.py", line 29, in <module>
+    from torch.nn.attention.flex_attention import _DEFAULT_SPARSE_BLOCK_SIZE as flex_default_block_size
+  File "/root/miniconda3/envs/gpt2-exp/lib/python3.10/site-packages/torch/nn/attention/flex_attention.py", line 16, in <module>
+    from torch._dynamo._trace_wrapped_higher_order_op import TransformGetItemToIndex
+  File "/root/miniconda3/envs/gpt2-exp/lib/python3.10/site-packages/torch/_dynamo/__init__.py", line 3, in <module>
+    from . import convert_frame, eval_frame, resume_execution
+  File "/root/miniconda3/envs/gpt2-exp/lib/python3.10/site-packages/torch/_dynamo/convert_frame.py", line 33, in <module>
+    from torch._dynamo.symbolic_convert import TensorifyState
+  File "/root/miniconda3/envs/gpt2-exp/lib/python3.10/site-packages/torch/_dynamo/symbolic_convert.py", line 30, in <module>
+    from . import config, exc, logging as torchdynamo_logging, trace_rules, variables
+  File "/root/miniconda3/envs/gpt2-exp/lib/python3.10/site-packages/torch/_dynamo/trace_rules.py", line 46, in <module>
+    from .variables import (
+  File "/root/miniconda3/envs/gpt2-exp/lib/python3.10/site-packages/torch/_dynamo/variables/__init__.py", line 2, in <module>
+    from .builtin import BuiltinVariable
+  File "/root/miniconda3/envs/gpt2-exp/lib/python3.10/site-packages/torch/_dynamo/variables/builtin.py", line 53, in <module>
+    from .ctx_manager import EventVariable, StreamVariable
+  File "/root/miniconda3/envs/gpt2-exp/lib/python3.10/site-packages/torch/_dynamo/variables/ctx_manager.py", line 22, in <module>
+    from .functions import (
+  File "/root/miniconda3/envs/gpt2-exp/lib/python3.10/site-packages/torch/_dynamo/variables/functions.py", line 33, in <module>
+    from torch.distributed.fsdp._fully_shard import _fsdp_param_group
+  File "/root/miniconda3/envs/gpt2-exp/lib/python3.10/site-packages/torch/distributed/fsdp/__init__.py", line 1, in <module>
+    from ._flat_param import FlatParameter as FlatParameter
+  File "/root/miniconda3/envs/gpt2-exp/lib/python3.10/site-packages/torch/distributed/fsdp/_flat_param.py", line 47, in <module>
+    from ._fsdp_extensions import (
+  File "/root/miniconda3/envs/gpt2-exp/lib/python3.10/site-packages/torch/distributed/fsdp/_fsdp_extensions.py", line 6, in <module>
+    from torch.distributed._shard.sharded_tensor.api import ShardedTensor
+  File "/root/miniconda3/envs/gpt2-exp/lib/python3.10/site-packages/torch/distributed/_shard/__init__.py", line 1, in <module>
+    from .api import _shard_tensor, load_with_process_group, shard_module, shard_parameter
+  File "/root/miniconda3/envs/gpt2-exp/lib/python3.10/site-packages/torch/distributed/_shard/api.py", line 9, in <module>
+    from torch.distributed._shard.sharded_tensor import ShardedTensor
+  File "/root/miniconda3/envs/gpt2-exp/lib/python3.10/site-packages/torch/distributed/_shard/sharded_tensor/__init__.py", line 8, in <module>
+    from .api import (
+  File "/root/miniconda3/envs/gpt2-exp/lib/python3.10/site-packages/torch/distributed/_shard/sharded_tensor/api.py", line 16, in <module>
+    import torch.distributed._shard.sharding_spec as shard_spec
+  File "/root/miniconda3/envs/gpt2-exp/lib/python3.10/site-packages/torch/distributed/_shard/sharding_spec/__init__.py", line 10, in <module>
+    from .chunk_sharding_spec import ChunkShardingSpec as ChunkShardingSpec
+  File "/root/miniconda3/envs/gpt2-exp/lib/python3.10/site-packages/torch/distributed/_shard/sharding_spec/chunk_sharding_spec.py", line 11, in <module>
+    from torch.distributed._shard.sharded_tensor.shard import Shard
+  File "/root/miniconda3/envs/gpt2-exp/lib/python3.10/site-packages/torch/distributed/_shard/sharded_tensor/shard.py", line 11, in <module>
+    class Shard:
+  File "/root/miniconda3/envs/gpt2-exp/lib/python3.10/dataclasses.py", line 1184, in dataclass
+    return wrap(cls)
+  File "/root/miniconda3/envs/gpt2-exp/lib/python3.10/dataclasses.py", line 1175, in wrap
+    return _process_class(cls, init, repr, eq, order, unsafe_hash,
+  File "/root/miniconda3/envs/gpt2-exp/lib/python3.10/dataclasses.py", line 1024, in _process_class
+    _init_fn(all_init_fields,
+  File "/root/miniconda3/envs/gpt2-exp/lib/python3.10/dataclasses.py", line 579, in _init_fn
+    return _create_fn('__init__',
+  File "/root/miniconda3/envs/gpt2-exp/lib/python3.10/dataclasses.py", line 432, in _create_fn
+    exec(txt, globals, ns)
+  File "<string>", line 1, in <module>
+KeyboardInterrupt
+[Info] System disk free: 3 GB
+[Warn] ⚠️ System overlay nearly full (<5GB). Redirecting caches to /workspace/cache ...
+[Cache redirect] HF_HOME → /workspace/cache
+[Cache redirect] HF_DATASETS_CACHE → /workspace/cache/hf_datasets
+[Cache redirect] TMPDIR → /workspace/cache/tmp
+[Cache redirect] TRANSFORMERS_CACHE → /workspace/cache/hf_transformers
+✅ Cache redirection complete.
+

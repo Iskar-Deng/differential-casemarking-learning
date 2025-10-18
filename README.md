@@ -173,18 +173,16 @@ python -m evaluation.eval_minipairs \
 #### Single Eval
 ```bash
 python -m evaluation.eval_single_ckpt \
-  --checkpoint /home/hd49/relational-casemarking-learning/checkpoints/independent_Anone_Panimate/checkpoint-10000 \
-  --jsonl /home/hd49/relational-casemarking-learning/evaluation/minimal_pairs/independent_Anone_Panimate/valid_test_minimal_pairs.jsonl \
+  --checkpoint /workspace/differential-casemarking-learning/checkpoints/independent_Anone_Pdefinite/checkpoint-60000 \
+  --jsonl /workspace/differential-casemarking-learning/evaluation/minimal_pairs/independent_Anone_Pdefinite/valid_test_minimal_pairs.jsonl \
   --batch-size 16 \
   --fp16 \
   --save-details results/1.jsonl
 
 python -m evaluation.eval_single_ckpt \
-  --checkpoint /home/hd49/relational-casemarking-learning/checkpoints/independent_Anone_Panimate/checkpoint-15000 \
-  --jsonl /home/hd49/relational-casemarking-learning/evaluation/BLiMP_raw/regular_plural_subject_verb_agreement_1.jsonl \
-  --batch-size 16 \
-  --fp16 \
-  --save-details results/Pp3.jsonl
+  --checkpoint /workspace/differential-casemarking-learning/checkpoints/independent_Anone_Pdefinite/checkpoint-70000 \
+  --jsonl /workspace/differential-casemarking-learning/evaluation/BLiMP_raw/regular_plural_subject_verb_agreement_1.jsonl \
+  --save-details results/2.jsonl
 
 ```
 

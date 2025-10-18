@@ -1,0 +1,49 @@
+run_id: basic_checkpoint
+model_name: gpt2
+seed: 42
+block_size: 1024
+resume: true
+resume_checkpoint: null
+checkpoint_frequency:
+- - 500
+  - 10000
+- - 1000
+  - 50000
+- - 5000
+  - 200000
+artifacts:
+  cache_dir: /workspace/differential-casemarking-learning/cache/basic_checkpoint
+  run_dir: /workspace/differential-casemarking-learning/checkpoints/basic_checkpoint
+training_arguments:
+  max_steps: 150000
+  learning_rate: 2.0e-05
+  weight_decay: 0.01
+  warmup_steps: 0
+  warmup_ratio: 0.03
+  lr_scheduler_type: cosine
+  per_device_train_batch_size: 96
+  gradient_accumulation_steps: 2
+  per_device_eval_batch_size: 64
+  optim: adamw_torch
+  bf16: true
+  fp16: false
+  gradient_checkpointing: false
+  dataloader_num_workers: 2
+  dataloader_pin_memory: true
+  max_grad_norm: 0.5
+  logging_steps: 50
+  eval_strategy: 'no'
+  eval_steps: 0
+  save_strategy: 'no'
+  load_best_model_at_end: false
+  metric_for_best_model: eval_loss
+  greater_is_better: false
+  prediction_loss_only: true
+  remove_unused_columns: false
+  report_to:
+  - tensorboard
+data:
+  train_files:
+  - /workspace/differential-casemarking-learning/data/perturbed/independent_Anone_Pdefinite/train_invalid.txt
+  eval_files:
+  - /workspace/differential-casemarking-learning/data/perturbed/independent_Anone_Pdefinite/valid_invalid.txt

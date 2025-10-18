@@ -1,6 +1,24 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
+"""
+Evaluate a single GPT-2 checkpoint on a minipairs JSONL dataset.
+
+Usage:
+    python -m evaluation.eval_single_ckpt \
+        --checkpoint /workspace/differential-casemarking-learning/checkpoints/independent_Anone_Panimate/checkpoint-70000 \
+        --jsonl evaluation/minimal_pairs/independent_Anone_Panimate/valid_test_minimal_pairs.jsonl \
+        --save-details results/independent_Anone_Panimate.jsonl
+    python -m evaluation.eval_single_ckpt \
+        --checkpoint /workspace/differential-casemarking-learning/checkpoints/independent_Anone_Pdefinite/checkpoint-70000 \
+        --jsonl evaluation/minimal_pairs/independent_Anone_Pdefinite/valid_test_minimal_pairs.jsonl \
+        --save-details results/independent_Anone_Pdefinite.jsonl
+    python -m evaluation.eval_single_ckpt \
+        --checkpoint /workspace/differential-casemarking-learning/checkpoints/independent_Anone_Pdefinite_inv/checkpoint-70000 \
+        --jsonl evaluation/minimal_pairs/independent_Anone_Pdefinite_inv/valid_test_minimal_pairs.jsonl \
+        --save-details results/independent_Anone_Pdefinite_inv.jsonl
+"""
+
 import argparse
 import json
 from pathlib import Path
@@ -10,9 +28,11 @@ import contextlib
 import torch
 from transformers import GPT2LMHeadModel, GPT2Tokenizer
 from tqdm.auto import tqdm
-from utils import AGENT_MARK, PATIENT_MARK  # 用于识别“带标记”的句子
 
 
+# =====================================================
+# Helpers
+# =====================================================
 def load_tokenizer(checkpoint: Path) -> GPT2Tokenizer:
     tokenizer = GPT2Tokenizer.from_pretrained(str(checkpoint))
     if tokenizer.pad_token is None:
@@ -21,12 +41,57 @@ def load_tokenizer(checkpoint: Path) -> GPT2Tokenizer:
 
 
 def load_model(checkpoint: Path, device: str) -> GPT2LMHeadModel:
-    model = GPT2LMHeadModel.from_pretrained(str(checkpoint)).to(device)
+    """
+    自动检测并修复 torch.compile() 导致的 '_orig_mod.' 前缀问题，
+    同时支持 Hugging Face safetensors / 分片权重。
+    """
+    import torch
+    from safetensors.torch import load_file as safe_load
+
+    bin_path = Path(checkpoint) / "pytorch_model.bin"
+    safe_path = Path(checkpoint) / "model.safetensors"
+    index_path = Path(checkpoint) / "pytorch_model.bin.index.json"
+
+    # ---- 判断权重文件格式 ----
+    if safe_path.exists():
+        print(f"[Info] 检测到 safetensors 权重文件: {safe_path.name}")
+        state_dict = safe_load(str(safe_path))
+    elif bin_path.exists():
+        print(f"[Info] 检测到 pytorch_model.bin 权重文件")
+        state_dict = torch.load(bin_path, map_location="cpu")
+    elif index_path.exists():
+        print(f"[Info] 检测到分片权重 index 文件: {index_path.name}")
+        state_dict = None  # 交给 from_pretrained 自动解析
+    else:
+        raise FileNotFoundError(f"未找到可用的权重文件 (safetensors/bin/index) 于 {checkpoint}")
+
+    # ---- 检查并修正 '_orig_mod.' 前缀 ----
+    has_orig_mod = state_dict is not None and any(k.startswith("_orig_mod.") for k in state_dict.keys())
+    if has_orig_mod:
+        print(f"[Fix] 检测到 torch.compile() 权重前缀 '_orig_mod.' → 正在修正...")
+        state_dict = {k.replace("_orig_mod.", ""): v for k, v in state_dict.items()}
+
+        # ✨ 关键改动：手动初始化 GPT2LMHeadModel，然后加载修正后的权重
+        from transformers import GPT2Config, GPT2LMHeadModel
+        config = GPT2Config.from_pretrained(checkpoint)
+        model = GPT2LMHeadModel(config)
+        missing, unexpected = model.load_state_dict(state_dict, strict=False)
+        if missing or unexpected:
+            print(f"[Warn] Missing: {len(missing)}, Unexpected: {len(unexpected)}")
+    else:
+        from transformers import GPT2LMHeadModel
+        model = GPT2LMHeadModel.from_pretrained(str(checkpoint))
+
+
+    model.to(device)
     model.eval()
     return model
 
 
+
+
 def read_minipairs(jsonl_path: Path) -> List[Tuple[str, str]]:
+    """读取 sentence_good / sentence_bad 对"""
     pairs: List[Tuple[str, str]] = []
     with jsonl_path.open(encoding="utf-8") as f:
         for line in f:
@@ -54,6 +119,7 @@ def _masked_labels(inputs: Dict[str, torch.Tensor]) -> torch.Tensor:
 
 @torch.inference_mode()
 def per_sample_loss(texts: List[str], model: GPT2LMHeadModel, tokenizer: GPT2Tokenizer, device: str) -> List[float]:
+    """计算每个样本的平均 token-level loss"""
     enc = tokenizer(
         texts,
         return_tensors="pt",
@@ -80,6 +146,9 @@ def per_sample_loss(texts: List[str], model: GPT2LMHeadModel, tokenizer: GPT2Tok
     return sample_loss.detach().float().cpu().tolist()
 
 
+# =====================================================
+# Evaluation
+# =====================================================
 def evaluate_single_checkpoint(
     checkpoint: Path,
     jsonl_path: Path,
@@ -93,7 +162,6 @@ def evaluate_single_checkpoint(
 
     tokenizer = load_tokenizer(checkpoint)
     model = load_model(checkpoint, device)
-
     pairs = read_minipairs(jsonl_path)
     if not pairs:
         raise RuntimeError(f"No valid pairs found in {jsonl_path}")
@@ -103,13 +171,7 @@ def evaluate_single_checkpoint(
     delta_losses = []
     delta_correct = []
     delta_wrong = []
-
-    marked_correct = 0
-    marked_total = 0
-    unmarked_correct = 0
-    unmarked_total = 0
-
-    details: List[Dict] = []
+    details = []
 
     amp_ctx = (
         torch.autocast(device_type="cuda", dtype=torch.float16)
@@ -128,42 +190,27 @@ def evaluate_single_checkpoint(
                 lg = losses[2 * i]
                 lb = losses[2 * i + 1]
                 diff = lb - lg
+
                 delta_losses.append(diff)
-
-                pred = 1 if lg < lb else 0
-                label = 1
-                is_correct = (pred == label)
-
-                correct += int(is_correct)
+                pred_correct = lg < lb
+                correct += int(pred_correct)
                 total += 1
-                (delta_correct if is_correct else delta_wrong).append(diff)
-
-                is_marked = (AGENT_MARK in g or PATIENT_MARK in g)
-                if is_marked:
-                    marked_total += 1
-                    if is_correct:
-                        marked_correct += 1
-                else:
-                    unmarked_total += 1
-                    if is_correct:
-                        unmarked_correct += 1
+                (delta_correct if pred_correct else delta_wrong).append(diff)
 
                 if save_details is not None:
-                    details.append(
-                        {
-                            "sentence_good": g,
-                            "sentence_bad": b,
-                            "loss_good": lg,
-                            "loss_bad": lb,
-                            "loss_diff": diff,
-                            "correct": is_correct,
-                            "marked": is_marked,
-                        }
-                    )
+                    details.append({
+                        "sentence_good": g,
+                        "sentence_bad": b,
+                        "loss_good": lg,
+                        "loss_bad": lb,
+                        "loss_diff": diff,
+                        "correct": pred_correct,
+                    })
 
     accuracy = correct / total if total > 0 else float("nan")
-    marked_acc = marked_correct / marked_total if marked_total > 0 else float("nan")
-    unmarked_acc = unmarked_correct / unmarked_total if unmarked_total > 0 else float("nan")
+    mean_delta = sum(delta_losses) / len(delta_losses) if delta_losses else float("nan")
+    mean_delta_correct = sum(delta_correct) / len(delta_correct) if delta_correct else float("nan")
+    mean_delta_wrong = sum(delta_wrong) / len(delta_wrong) if delta_wrong else float("nan")
 
     if save_details is not None:
         save_details.parent.mkdir(parents=True, exist_ok=True)
@@ -176,23 +223,23 @@ def evaluate_single_checkpoint(
         torch.cuda.empty_cache()
 
     return {
+        "checkpoint": str(checkpoint),
         "accuracy": accuracy,
         "correct": correct,
         "total": total,
-        "mean_delta": sum(delta_losses) / len(delta_losses) if delta_losses else float("nan"),
-        "mean_delta_correct": sum(delta_correct) / len(delta_correct) if delta_correct else float("nan"),
-        "mean_delta_wrong": sum(delta_wrong) / len(delta_wrong) if delta_wrong else float("nan"),
-        "marked_acc": marked_acc,
-        "marked_total": marked_total,
-        "unmarked_acc": unmarked_acc,
-        "unmarked_total": unmarked_total,
+        "mean_delta": mean_delta,
+        "mean_delta_correct": mean_delta_correct,
+        "mean_delta_wrong": mean_delta_wrong,
     }
 
 
+# =====================================================
+# Main
+# =====================================================
 def main():
-    parser = argparse.ArgumentParser(description="Evaluate a single GPT-2 checkpoint on minipairs JSONL.")
-    parser.add_argument("--checkpoint", type=Path, required=True)
-    parser.add_argument("--jsonl", type=Path, required=True)
+    parser = argparse.ArgumentParser(description="Evaluate a single GPT-2 checkpoint on a minipairs JSONL dataset.")
+    parser.add_argument("--checkpoint", type=Path, required=True, help="Path to the checkpoint folder")
+    parser.add_argument("--jsonl", type=Path, required=True, help="JSONL file with sentence_good / sentence_bad pairs")
     parser.add_argument("--batch-size", type=int, default=16)
     parser.add_argument("--fp16", action="store_true")
     parser.add_argument("--device", type=str, default=None)
@@ -217,8 +264,6 @@ def main():
     print(f"Mean Δloss   : {res['mean_delta']:.4f}")
     print(f"Mean Δ(correct): {res['mean_delta_correct']:.4f}")
     print(f"Mean Δ(wrong)  : {res['mean_delta_wrong']:.4f}")
-    print(f"Marked acc   : {res['marked_acc']:.4f} (n={res['marked_total']} / {res['total']}, {res['marked_total']/res['total']:.1%})")
-    print(f"Unmarked acc : {res['unmarked_acc']:.4f} (n={res['unmarked_total']} / {res['total']}, {res['unmarked_total']/res['total']:.1%})")
 
 
 if __name__ == "__main__":

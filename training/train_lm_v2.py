@@ -5,7 +5,7 @@ Train a causal LM from a YAML config file.
 
 Usage:
     python -m training.train_lm_v2 \
-        --config configs/independent_Anone_Panimate.yaml
+        --config /workspace/differential-casemarking-learning/configs/independent_Anone_Pdefinite.yaml
 """
 
 import os
@@ -21,6 +21,7 @@ from typing import List, Dict, Any, Optional
 
 import yaml
 import torch
+import numpy
 from datasets import load_dataset, concatenate_datasets
 from transformers import (
     AutoTokenizer,
@@ -34,16 +35,25 @@ from transformers import (
 from utils import CHECKPOINT_PATH, CACHE_PATH, AGENT_MARK, PATIENT_MARK
 
 
-# -------------------------
+# =====================================================
 # 环境设置
-# -------------------------
+# =====================================================
 if "PYTORCH_CUDA_ALLOC_CONF" not in os.environ:
     os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "max_split_size_mb:64"
     print(f"[Info] Set PYTORCH_CUDA_ALLOC_CONF={os.environ['PYTORCH_CUDA_ALLOC_CONF']}")
 
+# 🚀 重定向 Hugging Face 缓存路径到 /workspace（防止 overlay 爆盘）
+os.environ.setdefault("HF_HOME", "/workspace/differential-casemarking-learning/cache")
+os.environ.setdefault("HF_DATASETS_CACHE", "/workspace/differential-casemarking-learning/cache/hf_datasets")
+os.environ.setdefault("TMPDIR", "/workspace/differential-casemarking-learning/cache/tmp")
+
+for k in ["HF_HOME", "HF_DATASETS_CACHE", "TMPDIR"]:
+    os.makedirs(os.environ[k], exist_ok=True)
+    print(f"[Cache redirect] {k} → {os.environ[k]}")
+
 torch.cuda.empty_cache()
-torch.set_num_threads(1)
-torch.set_num_interop_threads(1)
+torch.set_num_threads(8)
+torch.set_num_interop_threads(8)
 
 if torch.backends.cudnn.is_available():
     torch.backends.cudnn.benchmark = True
@@ -56,9 +66,9 @@ except Exception:
     pass
 
 
-# -------------------------
+# =====================================================
 # Helpers
-# -------------------------
+# =====================================================
 def _expand(p: str) -> str:
     return os.path.expandvars(os.path.expanduser(p))
 
@@ -153,8 +163,6 @@ def _group_texts(examples: Dict[str, list], block_size: int):
         k: [t[i:i + block_size] for i in range(0, total_len, block_size)]
         for k, t in concatenated.items()
     }
-    if "input_ids" not in result:
-        result["input_ids"] = []
     result["labels"] = result["input_ids"].copy()
     return result
 
@@ -176,9 +184,9 @@ def _count_total_tokens(tokenized_ds, batch_size: int = 1000) -> int:
     return total
 
 
-# -------------------------
+# =====================================================
 # Callbacks
-# -------------------------
+# =====================================================
 class ValidPPLLogger(TrainerCallback):
     def __init__(self, csv_path: Path):
         self.csv_path = csv_path
@@ -187,7 +195,6 @@ class ValidPPLLogger(TrainerCallback):
         if not csv_path.exists():
             with open(self._csv_path_str, "w", newline="") as f:
                 csv.writer(f).writerow(["step", "eval_loss", "ppl", "wall_time"])
-        self.tb_writer = None
 
     def on_evaluate(self, args, state, control, metrics, **kwargs):
         if "eval_loss" not in metrics:
@@ -236,9 +243,9 @@ class DynamicCheckpointSaver(TrainerCallback):
         return control
 
 
-# -------------------------
+# =====================================================
 # Main
-# -------------------------
+# =====================================================
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--config", type=str, required=True, help="Path to YAML config file")
@@ -266,9 +273,6 @@ def main():
     run_dir.mkdir(parents=True, exist_ok=True)
     cache_dir.mkdir(parents=True, exist_ok=True)
 
-    os.environ["HF_HOME"] = str(cache_dir)
-    os.environ["HF_DATASETS_CACHE"] = str(cache_dir / "datasets")
-
     targs = dict(cfg.get("training_arguments", {}))
     model_name = cfg.get("model_name", "gpt2")
     block_size = int(cfg.get("block_size", 1024))
@@ -287,6 +291,7 @@ def main():
         gas = math.ceil(float(effective_bsz) / max(pbsz, 1))
         targs["gradient_accumulation_steps"] = int(gas)
 
+    # ---------- Dataset ----------
     train_ds = _build_dataset(train_files)
     eval_ds = _build_dataset(eval_files) if eval_files else None
 
@@ -313,29 +318,27 @@ def main():
     def tok_fn(batch):
         return tokenizer(batch["text"], return_attention_mask=False)
 
-    train_tok = train_ds.map(tok_fn, batched=True, remove_columns=train_ds.column_names, num_proc=1)
-    eval_tok = eval_ds.map(tok_fn, batched=True, remove_columns=eval_ds.column_names, num_proc=1) if eval_ds else None
+    train_tok = train_ds.map(tok_fn, batched=True, remove_columns=train_ds.column_names, num_proc=4)
+    eval_tok = eval_ds.map(tok_fn, batched=True, remove_columns=eval_ds.column_names, num_proc=4) if eval_ds else None
 
     raw_train_tokens = _count_total_tokens(train_tok)
     usable_train_tokens = (raw_train_tokens // block_size) * block_size
 
-    train_tok = train_tok.map(
-        lambda ex: _group_texts(ex, block_size),
-        batched=True,
-        batch_size=1000,
-        num_proc=1,
-    )
-
+    train_tok = train_tok.map(lambda ex: _group_texts(ex, block_size), batched=True, batch_size=1000, num_proc=1)
     if eval_tok:
-        eval_tok = eval_tok.map(
-            lambda ex: _group_texts(ex, block_size),
-            batched=True,
-            batch_size=1000,
-            num_proc=1,
-        )
+        eval_tok = eval_tok.map(lambda ex: _group_texts(ex, block_size), batched=True, batch_size=1000, num_proc=1)
 
+    # ---------- Trainer ----------
     collator = DataCollatorForLanguageModeling(tokenizer=tokenizer, mlm=False)
-    training_args = TrainingArguments(output_dir=str(run_dir), seed=seed, disable_tqdm=False, **targs)
+    training_args = TrainingArguments(
+        output_dir=str(run_dir),
+        seed=seed,
+        disable_tqdm=False,
+        **targs,
+    )
+    training_args.dataloader_persistent_workers = (
+        getattr(training_args, "dataloader_num_workers", 0) > 0
+    )
 
     trainer = Trainer(
         model=model,
@@ -346,6 +349,7 @@ def main():
         tokenizer=tokenizer,
     )
 
+    # ---------- Callbacks ----------
     if "checkpoint_frequency" in cfg:
         trainer.add_callback(DynamicCheckpointSaver(cfg["checkpoint_frequency"], run_dir))
 
